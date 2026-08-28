@@ -1,0 +1,16 @@
+# Build output
+/target
+/dist
+node_modules
+
+# Tauri generated
+src-tauri/gen/schemas
+
+# Editor / OS
+.DS_Store
+.idea
+*.swp
+
+# Logs
+*.log
+npm-debug.log*

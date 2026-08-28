@@ -1,0 +1,114 @@
+/*
+ * Kestrel design tokens.
+ * Single source of truth for colour, type and spacing — see docs/02-DESIGN.md.
+ * Every value flips automatically between light and dark.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ── Typography ─────────────────────────────────────────── */
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI Variable Text", "Segoe UI",
+    Inter, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-lg: 15px;
+  --text-xl: 19px;
+
+  /* ── Spacing (8px grid) ─────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ── Radii ──────────────────────────────────────────────── */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* ── Motion ─────────────────────────────────────────────── */
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── Light palette ──────────────────────────────────────── */
+  --bg-canvas: #f6f6f5;
+  --bg-surface: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-inset: #f1f0ee;
+  --bg-hover: rgb(0 0 0 / 0.04);
+  --bg-active: rgb(0 0 0 / 0.07);
+
+  --text-primary: #1c1c1b;
+  --text-secondary: #5f5e5a;
+  --text-muted: #8a8983;
+
+  --border: rgb(0 0 0 / 0.11);
+  --border-strong: rgb(0 0 0 / 0.2);
+
+  --accent: #2f6fd0;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(47 111 208 / 0.12);
+
+  --success: #1d7a4f;
+  --warning: #a86a10;
+  --danger: #c0392f;
+
+  /* Recording red is fixed on purpose: it must read as "recording"
+     everywhere, so it never follows the system accent colour. */
+  --record: #ff453a;
+
+  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-canvas: #1b1b1d;
+    --bg-surface: #242426;
+    --bg-raised: #2c2c2f;
+    --bg-inset: #1a1a1c;
+    --bg-hover: rgb(255 255 255 / 0.06);
+    --bg-active: rgb(255 255 255 / 0.1);
+
+    --text-primary: #f2f2f0;
+    --text-secondary: #a8a7a2;
+    --text-muted: #77766f;
+
+    --border: rgb(255 255 255 / 0.12);
+    --border-strong: rgb(255 255 255 / 0.22);
+
+    --accent: #5a9bf0;
+    --accent-fg: #0b1a2e;
+    --accent-soft: rgb(90 155 240 / 0.18);
+
+    --success: #4cc38a;
+    --warning: #e0a030;
+    --danger: #f0685c;
+
+    --shadow-popover: 0 8px 28px rgb(0 0 0 / 0.5), 0 1px 2px rgb(0 0 0 / 0.4);
+  }
+}
+
+/* Honour the accessibility settings the design doc commits to. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --border: rgb(0 0 0 / 0.35);
+    --border-strong: rgb(0 0 0 / 0.55);
+  }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "kestrel-capture"
+description = "Cross-platform screen, window and region capture for Kestrel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+kestrel-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+image.workspace = true
+xcap.workspace = true
