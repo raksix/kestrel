@@ -109,13 +109,35 @@ not capped at screen resolution.
 | 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
 | 4 | Screen recording, GIF, video tools | 🚧 audio capture left |
 | 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, eleven tools done |
-| 6 | CLI, integrations, scrolling capture, 1.0 | ⏳ |
+| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 CLI tools done |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·
 [`docs/01-FEATURE-PARITY.md`](docs/01-FEATURE-PARITY.md) ·
 [`docs/02-DESIGN.md`](docs/02-DESIGN.md) ·
 [`docs/03-SHAREX-FEATURES.md`](docs/03-SHAREX-FEATURES.md) — the itemised ShareX
 feature backlog, every capability with status and target phase
+
+## Command line
+
+`kestrel` exposes the tools that need nothing but a file — the same code the
+app calls, since none of it imports a UI.
+
+```bash
+kestrel hash release.dmg --expect 9f2c...      # exits non-zero on a mismatch
+kestrel compare before.png after.png --diff d.png
+kestrel color shot.png 420 180 --radius 2
+kestrel metadata photo.jpg --strip
+kestrel convert clip.mkv --to gif --width 720 --fps 12
+kestrel analyze shot.png --json | jq .dominant
+```
+
+Results go to stdout and diagnostics to stderr, and the commands that answer a
+yes/no question exit non-zero for "no", so they compose with `&&` and `|`.
+
+The subcommands that would drive a *running* app — taking a screenshot,
+running a workflow, uploading — are not there yet: they need an IPC channel to
+the running instance that does not exist. Rather than ship them as stubs that
+fail at run time, `kestrel --help` advertises only what works.
 
 ## Platform support
 
@@ -164,6 +186,7 @@ window list. Kestrel detects this and says so instead of appearing broken.
 ## Architecture
 
 ```
+crates/kestrel-cli       the `kestrel` command-line binary
 crates/kestrel-core      domain model, workflows, filename tokens (no UI, no Tauri)
 crates/kestrel-capture   platform capture backends behind one trait
 crates/kestrel-editor    annotation model, effects, history, export renderer

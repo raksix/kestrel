@@ -1,0 +1,29 @@
+[package]
+name = "kestrel-cli"
+description = "Command-line access to Kestrel's tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "kestrel"
+path = "src/main.rs"
+
+[dependencies]
+kestrel-core.workspace = true
+kestrel-editor.workspace = true
+kestrel-record.workspace = true
+kestrel-tools.workspace = true
+kestrel-upload.workspace = true
+image.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+# The tests build fixtures and read back what the CLI wrote.
+image.workspace = true
+serde_json.workspace = true

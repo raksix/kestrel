@@ -467,9 +467,17 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | `-nohotkeys` | `--no-hotkeys` | `[ ]` |
 | `-customuploader "<.sxcu>"` | `kestrel import <dosya>` | `[ ]` |
 | `-imageeffect "<.sxie>"` | aynı komut | `[ ]` |
-| `-ImageEditor`, `-OCR`, `-QRCode`, `-HashCheck`, `-Metadata`, `-PinToScreen`, `-VideoConverter` | `kestrel tool <ad> <yol>` | `[ ]` |
+| `-ImageEditor`, `-PinToScreen` | çalışan uygulama gerekli | `[ ]` |
+| `-OCR`, `-QRCode`, `-HashCheck`, `-Metadata`, `-VideoConverter` | `kestrel ocr\|qr\|hash\|metadata\|convert <yol>` | `[x]` |
 
-Tümü faz 6.
+Ek olarak Kestrel'de: `compare`, `color`, `analyze`, `index`, `thumbnail`,
+`name`, `sxcu`, `sxie` ve her komutta `--json`.
+
+**Neden yarısı boş:** dosyayla çalışan komutlar bitti, uygulamayı süren
+komutlar (yakalama, workflow çalıştırma, yükleme) çalışan örneğe bağlanacak
+bir IPC kanalı istiyor ve o kanal henüz yok. Çalışmayacak komutları `--help`'e
+yazmak, yokluklarından kötü olurdu; bu yüzden CLI yalnızca yapabildiğini
+duyuruyor.
 
 ### 12.2 Sistem entegrasyonu
 
