@@ -70,11 +70,32 @@ export interface CaptureOutput {
 }
 
 export interface TaskSettings {
+  after_capture: string[];
+  after_upload: string[];
   filename_pattern: string;
   output_directory: string | null;
   quality: number;
   image_format: string;
 }
+
+/** One entry in the after-capture or after-upload chain. */
+export interface TaskInfo {
+  id: string;
+  /** False when Kestrel does not perform this task yet, so the UI greys it out. */
+  implemented: boolean;
+  /** True when the task does nothing without "save to file" earlier in the chain. */
+  needsSavedFile: boolean;
+}
+
+/** After-capture tasks and after-upload tasks, both in pipeline order. */
+export const listTasks = () => invoke<[TaskInfo[], TaskInfo[]]>("list_tasks");
+
+/** Replace a workflow's chain, or the defaults when `id` is null. */
+export const setTasks = (
+  id: string | null,
+  afterCapture: string[],
+  afterUpload: string[],
+) => invoke<AppSettings>("set_tasks", { id, afterCapture, afterUpload });
 
 export interface Workflow {
   id: string;

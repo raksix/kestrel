@@ -4,6 +4,7 @@ import Library from "./features/library/Library";
 import Tools from "./features/tools/Tools";
 import PermissionGate from "./features/settings/PermissionGate";
 import ShortcutSettings from "./features/settings/ShortcutSettings";
+import TaskChain from "./features/settings/TaskChain";
 import { openEditor } from "./lib/editorTypes";
 import { pinLastCapture } from "./lib/ipc";
 import RecordingBar from "./features/record/RecordingBar";
@@ -17,6 +18,7 @@ import {
   previewFilename,
   runWorkflow,
   setFilenamePattern,
+  type AppSettings,
   type Capabilities,
   type CaptureOutput,
   type Workflow,
@@ -85,9 +87,11 @@ export default function App() {
   const [latest, setLatest] = useState<CaptureOutput | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
 
   const refresh = useCallback(() => {
     listWorkflows().then(setWorkflows).catch((e) => setError(String(e)));
+    getSettings().then(setSettings).catch((e) => setError(String(e)));
     platformCapabilities().then(setCapabilities).catch((e) => setError(String(e)));
   }, []);
 
@@ -180,7 +184,17 @@ export default function App() {
               />
             )}
             {section === "shortcuts" && (
-              <ShortcutSettings workflows={workflows} onWorkflowsChanged={setWorkflows} />
+              <>
+                <ShortcutSettings workflows={workflows} onWorkflowsChanged={setWorkflows} />
+                <TaskChain
+                  workflows={workflows}
+                  settings={settings}
+                  onSettingsChanged={(updated) => {
+                    setSettings(updated);
+                    setWorkflows(updated.workflows);
+                  }}
+                />
+              </>
             )}
             {section === "library" && <Library />}
             {section === "destinations" && <Destinations />}

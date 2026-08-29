@@ -73,6 +73,136 @@ pub enum AfterUploadTask {
     ShowQrCode,
 }
 
+impl AfterCaptureTask {
+    /// Every task, in the order ShareX runs them.
+    ///
+    /// The order is the pipeline, not a menu ordering: "save to file" has to
+    /// happen before "copy the file path", and "upload" before anything that
+    /// touches the resulting URL.
+    pub const ALL: [AfterCaptureTask; 22] = [
+        AfterCaptureTask::ShowQuickTaskMenu,
+        AfterCaptureTask::ShowAfterCaptureWindow,
+        AfterCaptureTask::BeautifyImage,
+        AfterCaptureTask::AddImageEffects,
+        AfterCaptureTask::OpenInEditor,
+        AfterCaptureTask::CopyImageToClipboard,
+        AfterCaptureTask::PinToScreen,
+        AfterCaptureTask::PrintImage,
+        AfterCaptureTask::SaveImageToFile,
+        AfterCaptureTask::SaveImageToFileAs,
+        AfterCaptureTask::SaveThumbnailImageToFile,
+        AfterCaptureTask::PerformActions,
+        AfterCaptureTask::CopyFileToClipboard,
+        AfterCaptureTask::CopyFilePathToClipboard,
+        AfterCaptureTask::CopyFolderPathToClipboard,
+        AfterCaptureTask::ShowInFileManager,
+        AfterCaptureTask::AnalyzeImage,
+        AfterCaptureTask::ScanQrCode,
+        AfterCaptureTask::RecognizeText,
+        AfterCaptureTask::ShowBeforeUploadWindow,
+        AfterCaptureTask::UploadImageToHost,
+        AfterCaptureTask::DeleteFileLocally,
+    ];
+
+    /// A stable identifier for settings files and IPC.
+    pub fn id(self) -> &'static str {
+        match self {
+            AfterCaptureTask::ShowQuickTaskMenu => "show_quick_task_menu",
+            AfterCaptureTask::ShowAfterCaptureWindow => "show_after_capture_window",
+            AfterCaptureTask::BeautifyImage => "beautify_image",
+            AfterCaptureTask::AddImageEffects => "add_image_effects",
+            AfterCaptureTask::OpenInEditor => "open_in_editor",
+            AfterCaptureTask::CopyImageToClipboard => "copy_image_to_clipboard",
+            AfterCaptureTask::PinToScreen => "pin_to_screen",
+            AfterCaptureTask::PrintImage => "print_image",
+            AfterCaptureTask::SaveImageToFile => "save_image_to_file",
+            AfterCaptureTask::SaveImageToFileAs => "save_image_to_file_as",
+            AfterCaptureTask::SaveThumbnailImageToFile => "save_thumbnail_image_to_file",
+            AfterCaptureTask::PerformActions => "perform_actions",
+            AfterCaptureTask::CopyFileToClipboard => "copy_file_to_clipboard",
+            AfterCaptureTask::CopyFilePathToClipboard => "copy_file_path_to_clipboard",
+            AfterCaptureTask::CopyFolderPathToClipboard => "copy_folder_path_to_clipboard",
+            AfterCaptureTask::ShowInFileManager => "show_in_file_manager",
+            AfterCaptureTask::AnalyzeImage => "analyze_image",
+            AfterCaptureTask::ScanQrCode => "scan_qr_code",
+            AfterCaptureTask::RecognizeText => "recognize_text",
+            AfterCaptureTask::ShowBeforeUploadWindow => "show_before_upload_window",
+            AfterCaptureTask::UploadImageToHost => "upload_image_to_host",
+            AfterCaptureTask::DeleteFileLocally => "delete_file_locally",
+        }
+    }
+
+    /// Whether Kestrel actually performs this task yet.
+    ///
+    /// This is reported to the UI so an unimplemented task can be shown greyed
+    /// out with a reason, rather than being selectable and then quietly doing
+    /// nothing — which is the worst of the three options, because the user has
+    /// no way to tell the difference between "did not run" and "ran and had no
+    /// effect".
+    ///
+    /// Update this in the same commit that implements the task, never before.
+    pub fn implemented(self) -> bool {
+        matches!(
+            self,
+            AfterCaptureTask::OpenInEditor
+                | AfterCaptureTask::CopyImageToClipboard
+                | AfterCaptureTask::PinToScreen
+                | AfterCaptureTask::SaveImageToFile
+                | AfterCaptureTask::SaveThumbnailImageToFile
+                | AfterCaptureTask::CopyFilePathToClipboard
+                | AfterCaptureTask::CopyFolderPathToClipboard
+                | AfterCaptureTask::ShowInFileManager
+                | AfterCaptureTask::ScanQrCode
+                | AfterCaptureTask::RecognizeText
+                | AfterCaptureTask::UploadImageToHost
+                | AfterCaptureTask::DeleteFileLocally
+        )
+    }
+
+    /// Tasks that need a file on disk, and so are pointless without
+    /// `SaveImageToFile` earlier in the chain.
+    pub fn needs_saved_file(self) -> bool {
+        matches!(
+            self,
+            AfterCaptureTask::SaveThumbnailImageToFile
+                | AfterCaptureTask::CopyFileToClipboard
+                | AfterCaptureTask::CopyFilePathToClipboard
+                | AfterCaptureTask::CopyFolderPathToClipboard
+                | AfterCaptureTask::ShowInFileManager
+                | AfterCaptureTask::DeleteFileLocally
+        )
+    }
+}
+
+impl AfterUploadTask {
+    pub const ALL: [AfterUploadTask; 6] = [
+        AfterUploadTask::ShowAfterUploadWindow,
+        AfterUploadTask::ShortenUrl,
+        AfterUploadTask::ShareUrl,
+        AfterUploadTask::CopyUrlToClipboard,
+        AfterUploadTask::OpenUrl,
+        AfterUploadTask::ShowQrCode,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            AfterUploadTask::ShowAfterUploadWindow => "show_after_upload_window",
+            AfterUploadTask::ShortenUrl => "shorten_url",
+            AfterUploadTask::ShareUrl => "share_url",
+            AfterUploadTask::CopyUrlToClipboard => "copy_url_to_clipboard",
+            AfterUploadTask::OpenUrl => "open_url",
+            AfterUploadTask::ShowQrCode => "show_qr_code",
+        }
+    }
+
+    pub fn implemented(self) -> bool {
+        matches!(
+            self,
+            AfterUploadTask::CopyUrlToClipboard | AfterUploadTask::OpenUrl
+        )
+    }
+}
+
 /// What a destination can accept. Mirrors ShareX's `DestinationType` flags.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DestinationKinds {
@@ -261,6 +391,97 @@ pub fn system_reserved(accelerator: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn every_task_appears_in_all_exactly_once() {
+        // ALL drives the settings UI. A variant missing from it is a task the
+        // user can never switch on, and a duplicate is one that appears twice.
+        let mut ids: Vec<&str> = AfterCaptureTask::ALL.iter().map(|t| t.id()).collect();
+        let count = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+
+        assert_eq!(ids.len(), count, "duplicate task in ALL");
+        assert_eq!(count, 22, "ShareX has 22 after-capture tasks");
+    }
+
+    #[test]
+    fn all_is_in_the_order_the_pipeline_runs() {
+        // The order is the pipeline, not a menu ordering: saving has to precede
+        // copying the file path, and uploading has to precede deleting it.
+        let position = |task: AfterCaptureTask| {
+            AfterCaptureTask::ALL
+                .iter()
+                .position(|t| *t == task)
+                .expect("in ALL")
+        };
+
+        assert!(
+            position(AfterCaptureTask::SaveImageToFile)
+                < position(AfterCaptureTask::CopyFilePathToClipboard)
+        );
+        assert!(
+            position(AfterCaptureTask::SaveImageToFile)
+                < position(AfterCaptureTask::ShowInFileManager)
+        );
+        assert!(
+            position(AfterCaptureTask::UploadImageToHost)
+                < position(AfterCaptureTask::DeleteFileLocally)
+        );
+    }
+
+    #[test]
+    fn every_upload_task_appears_in_all_exactly_once() {
+        let mut ids: Vec<&str> = AfterUploadTask::ALL.iter().map(|t| t.id()).collect();
+        let count = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+
+        assert_eq!(ids.len(), count);
+        assert_eq!(count, 6);
+    }
+
+    #[test]
+    fn task_ids_match_their_serde_names() {
+        // The id is what settings files and IPC carry. If it drifted from the
+        // serde representation, a saved workflow would silently stop matching.
+        for task in AfterCaptureTask::ALL {
+            let serialised = serde_json::to_string(&task).expect("serialises");
+            assert_eq!(serialised.trim_matches('"'), task.id(), "{task:?}");
+        }
+        for task in AfterUploadTask::ALL {
+            let serialised = serde_json::to_string(&task).expect("serialises");
+            assert_eq!(serialised.trim_matches('"'), task.id(), "{task:?}");
+        }
+    }
+
+    #[test]
+    fn the_default_tasks_are_ones_that_actually_work() {
+        // Shipping a default that does nothing would make the app look broken
+        // out of the box.
+        let settings = TaskSettings::default();
+
+        for task in &settings.after_capture {
+            assert!(task.implemented(), "{task:?} is a default but does nothing");
+        }
+        for task in &settings.after_upload {
+            assert!(task.implemented(), "{task:?} is a default but does nothing");
+        }
+    }
+
+    #[test]
+    fn tasks_that_need_a_file_are_the_ones_that_touch_a_path() {
+        // Used by the UI to warn that these are pointless without "save to
+        // file" earlier in the chain.
+        assert!(AfterCaptureTask::CopyFilePathToClipboard.needs_saved_file());
+        assert!(AfterCaptureTask::ShowInFileManager.needs_saved_file());
+        assert!(AfterCaptureTask::DeleteFileLocally.needs_saved_file());
+
+        assert!(!AfterCaptureTask::CopyImageToClipboard.needs_saved_file());
+        assert!(!AfterCaptureTask::PinToScreen.needs_saved_file());
+        assert!(!AfterCaptureTask::SaveImageToFile.needs_saved_file());
+    }
+
     use super::*;
 
     #[test]

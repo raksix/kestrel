@@ -214,18 +214,18 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | 8 | Yazdır | `[ ]` | 3 |
 | 9 | Dosyaya kaydet | `[x]` | 1 |
 | 10 | Farklı kaydet | `[ ]` | 2 |
-| 11 | Küçük resmi dosyaya kaydet | `[ ]` | 3 |
+| 11 | Küçük resmi dosyaya kaydet | `[x]` | 3 |
 | 12 | Eylemleri çalıştır (harici program) | `[ ]` | 5 |
 | 13 | Dosyayı panoya kopyala | `[ ]` | 2 |
-| 14 | Dosya yolunu panoya kopyala | `[ ]` | 2 |
-| 15 | Klasör yolunu panoya kopyala | `[ ]` | 2 |
-| 16 | Dosya yöneticisinde göster | `[ ]` | 2 |
+| 14 | Dosya yolunu panoya kopyala | `[x]` | 2 |
+| 15 | Klasör yolunu panoya kopyala | `[x]` | 2 |
+| 16 | Dosya yöneticisinde göster | `[x]` | 2 |
 | 17 | Görseli analiz et | `[x]` | 5 |
 | 18 | QR kodu tara | `[x]` | 5 |
 | 19 | Metin tanı (OCR) | `[x]` | 5 |
 | 20 | "Yükleme öncesi" penceresini göster | `[ ]` | 3 |
-| 21 | Görseli yükle | `[~]` | 3 | custom uploader üzerinden çalışıyor |
-| 22 | Dosyayı yerelden sil | `[ ]` | 3 |
+| 21 | Görseli yükle | `[x]` | 3 | zincirden otomatik, arka planda |
+| 22 | Dosyayı yerelden sil | `[x]` | 3 |
 
 **Kestrel eki:** AirDrop / sistem paylaşımı, betik çalıştırma.
 
@@ -395,7 +395,7 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | 12 | Görsel bölücü | `[ ]` | 5 | Izgaraya böl |
 | 13 | Küçük resim üretici | `[x]` | 5 | Tek kare; toplu üretim kaldı |
 | 14 | Video dönüştürücü | `[x]` | 4 | MP4/WebM/MKV/GIF/MP3, ölçek, FPS, ses ayırma |
-| 15 | Video küçük resmi | `[ ]` | 4 | Zaman damgalı ızgara |
+| 15 | Video küçük resmi | `[x]` | 4 | Tek kare; ızgara kaldı |
 | 16 | Görsel analizi | `[x]` | 5 | Boyut, format, histogram, baskın renkler, EXIF |
 | 17 | OCR | `[x]` | 5 | `ocrs`, modeller ilk kullanımda indirilir |
 | 18 | QR kod (oluştur + tara) | `[x]` | 5 | konum bilgisiyle |
@@ -446,7 +446,7 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | Workflow başına ayar geçersiz kılma | `[~]` | 3 |
 | Workflow'u etkinleştir/devre dışı bırak | `[x]` | 1 |
 | Kısayolları toptan devre dışı bırak | `[ ]` | 3 |
-| Workflow düzenleyici (görsel boru hattı) | `[ ]` | 3 |
+| Workflow düzenleyici (görev zinciri) | `[x]` | 3 |
 | Workflow içe/dışa aktarma | `[ ]` | 3 |
 | Ayarların diske kalıcı yazımı | `[x]` | 1 |
 | Taşınabilir mod | `[ ]` | 6 |

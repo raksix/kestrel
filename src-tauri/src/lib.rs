@@ -85,6 +85,8 @@ pub fn run() {
             commands::set_workflow_shortcut,
             commands::set_workflow_enabled,
             commands::reset_shortcuts,
+            commands::list_tasks,
+            commands::set_tasks,
             commands::shortcut_registration_report,
             commands::set_filename_pattern,
             commands::set_output_directory,

@@ -107,12 +107,185 @@ fn finish_capture(
         .after_capture
         .contains(&kestrel_core::model::AfterCaptureTask::OpenInEditor)
     {
-        if let Err(e) = crate::editor::open(app, image) {
+        if let Err(e) = crate::editor::open(app, image.clone()) {
             tracing::error!(%e, "could not open the editor");
         }
     }
 
+    run_file_tasks(app, &output, settings);
+    run_text_tasks(app, &image, settings);
+    run_upload_task(app, &image, settings);
+
     Ok(output)
+}
+
+/// After-capture tasks that act on the file that was just written.
+///
+/// Every one is skipped in silence when nothing was saved — asking to copy the
+/// file path when "save to file" is not in the chain is a configuration
+/// mistake, not a runtime failure, and it is already visible in the task list.
+fn run_file_tasks(app: &AppHandle, output: &CaptureOutput, settings: &TaskSettings) {
+    use kestrel_core::model::AfterCaptureTask as Task;
+
+    let Some(path) = output.path.as_deref().map(std::path::Path::new) else {
+        return;
+    };
+    let enabled = |task: Task| settings.after_capture.contains(&task);
+
+    if enabled(Task::SaveThumbnailImageToFile) {
+        if let Err(err) = save_thumbnail(app, path) {
+            tracing::warn!(%err, "could not write the thumbnail");
+        }
+    }
+
+    // Both path tasks write text, so the later one wins if both are on. That
+    // matches ShareX and there is nothing sensible to do with two values.
+    if enabled(Task::CopyFilePathToClipboard) {
+        copy_text(&path.to_string_lossy());
+    }
+    if enabled(Task::CopyFolderPathToClipboard) {
+        if let Some(parent) = path.parent() {
+            copy_text(&parent.to_string_lossy());
+        }
+    }
+
+    if enabled(Task::ShowInFileManager) {
+        reveal(path);
+    }
+}
+
+fn save_thumbnail(app: &AppHandle, path: &std::path::Path) -> Result<(), String> {
+    let image = app
+        .state::<crate::editor::LastCapture>()
+        .get()
+        .ok_or("no capture")?;
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let destination = path.with_file_name(format!("{stem}-thumb.png"));
+
+    kestrel_tools::thumbnail(&image, 480, 480)
+        .save(&destination)
+        .map_err(err)
+}
+
+/// Put text on the clipboard, logging rather than failing.
+///
+/// A clipboard error must not lose a capture that is already on disk.
+fn copy_text(text: &str) {
+    match arboard::Clipboard::new().and_then(|mut c| c.set_text(text.to_string())) {
+        Ok(()) => {}
+        Err(err) => tracing::warn!(%err, "could not put text on the clipboard"),
+    }
+}
+
+/// Select the file in the platform's file manager.
+///
+/// Selecting it is the point — opening the folder alone leaves the user hunting
+/// for which of two hundred screenshots is the new one. Only Linux falls back
+/// to opening the directory, because there is no portable way to ask an
+/// arbitrary file manager to select a file.
+fn reveal(path: &std::path::Path) {
+    #[cfg(target_os = "macos")]
+    let command = std::process::Command::new("open")
+        .args(["-R"])
+        .arg(path)
+        .spawn();
+
+    #[cfg(target_os = "windows")]
+    let command = std::process::Command::new("explorer")
+        .arg(format!("/select,{}", path.display()))
+        .spawn();
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let command = std::process::Command::new("xdg-open")
+        .arg(path.parent().unwrap_or(path))
+        .spawn();
+
+    if let Err(err) = command {
+        tracing::warn!(%err, "could not show the file in the file manager");
+    }
+}
+
+/// ShareX's "recognize text": read the capture and make it searchable.
+///
+/// Skipped with a log line when the OCR models are not installed. Downloading
+/// twenty megabytes because a checkbox is ticked, without being asked, is not
+/// something a capture should do.
+fn run_text_tasks(app: &AppHandle, image: &image::RgbaImage, settings: &TaskSettings) {
+    if !settings
+        .after_capture
+        .contains(&kestrel_core::model::AfterCaptureTask::RecognizeText)
+    {
+        return;
+    }
+
+    let app = app.clone();
+    let image = image.clone();
+    std::thread::spawn(move || match crate::ocr::read(&app, &image) {
+        Ok(recognised) if recognised.text.is_empty() => {}
+        Ok(recognised) => {
+            if let Some(id) = app.state::<crate::history::LastEntryId>().get() {
+                let history = app.state::<crate::history::History>();
+                if let Err(err) = history.record_ocr(id, &recognised.text) {
+                    tracing::warn!(%err, "could not attach the recognised text");
+                }
+            }
+        }
+        Err(err) => tracing::info!(%err, "skipping text recognition"),
+    });
+}
+
+/// ShareX's "upload image to host", and the "delete file locally" that can only
+/// follow it.
+///
+/// Runs in the background: an upload takes as long as the network takes, and
+/// blocking the capture on it would make the shortcut feel broken.
+fn run_upload_task(app: &AppHandle, image: &image::RgbaImage, settings: &TaskSettings) {
+    use kestrel_core::model::AfterCaptureTask as Task;
+
+    if !settings.after_capture.contains(&Task::UploadImageToHost) {
+        return;
+    }
+
+    let app = app.clone();
+    let image = image.clone();
+    let delete_after = settings.after_capture.contains(&Task::DeleteFileLocally);
+    let destination = settings.destination_image.clone();
+
+    tauri::async_runtime::spawn(async move {
+        match upload_last_capture(app.clone(), destination).await {
+            Ok(uploaded) => {
+                if delete_after {
+                    // Only after a successful upload. Deleting on failure would
+                    // destroy the only copy of the capture.
+                    delete_local_copy(&app);
+                }
+                tracing::info!(url = %uploaded.url, "capture uploaded");
+            }
+            Err(err) => tracing::error!(%err, "could not upload the capture"),
+        }
+        drop(image);
+    });
+}
+
+fn delete_local_copy(app: &AppHandle) {
+    let Some(id) = app.state::<crate::history::LastEntryId>().get() else {
+        return;
+    };
+    let history = app.state::<crate::history::History>();
+
+    // The history entry keeps the URL, so the capture is not lost — the row
+    // stays and only the local file goes.
+    match history.get(id) {
+        Ok(Some(entry)) => {
+            if let Some(path) = entry.path {
+                if let Err(err) = std::fs::remove_file(&path) {
+                    tracing::warn!(%err, path, "could not delete the local copy");
+                }
+            }
+        }
+        Ok(None) => {}
+        Err(err) => tracing::warn!(%err, "could not find the entry to delete"),
+    }
 }
 
 // ── Discovery ───────────────────────────────────────────────────────────
@@ -1198,4 +1371,87 @@ pub fn video_thumbnail(
     )
     .map_err(err)?;
     Ok(output.to_string_lossy().into_owned())
+}
+
+// ── Workflow task chains ────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskInfo {
+    pub id: &'static str,
+    /// Whether Kestrel actually performs this task yet.
+    ///
+    /// Sent to the UI so an unimplemented task can be greyed out rather than
+    /// being selectable and then quietly doing nothing.
+    pub implemented: bool,
+    /// Whether the task is pointless without "save to file" earlier in the
+    /// chain, so the UI can say so instead of leaving the user guessing.
+    pub needs_saved_file: bool,
+}
+
+/// Every after-capture and after-upload task, in pipeline order.
+#[tauri::command]
+pub fn list_tasks() -> (Vec<TaskInfo>, Vec<TaskInfo>) {
+    use kestrel_core::model::{AfterCaptureTask, AfterUploadTask};
+
+    (
+        AfterCaptureTask::ALL
+            .iter()
+            .map(|task| TaskInfo {
+                id: task.id(),
+                implemented: task.implemented(),
+                needs_saved_file: task.needs_saved_file(),
+            })
+            .collect(),
+        AfterUploadTask::ALL
+            .iter()
+            .map(|task| TaskInfo {
+                id: task.id(),
+                implemented: task.implemented(),
+                needs_saved_file: false,
+            })
+            .collect(),
+    )
+}
+
+/// Replace a workflow's task chain, or the defaults when `id` is absent.
+///
+/// The chain is stored in pipeline order regardless of the order it arrives in.
+/// The order is the pipeline — saving before copying the path, uploading before
+/// deleting the file — so honouring an arbitrary order would let the UI build a
+/// workflow that cannot work.
+#[tauri::command]
+pub fn set_tasks(
+    id: Option<String>,
+    after_capture: Vec<kestrel_core::model::AfterCaptureTask>,
+    after_upload: Vec<kestrel_core::model::AfterUploadTask>,
+    settings: State<'_, SettingsState>,
+) -> Result<AppSettings, String> {
+    let mut after_capture = after_capture;
+    let mut after_upload = after_upload;
+    after_capture.sort_unstable();
+    after_capture.dedup();
+    after_upload.sort_unstable();
+    after_upload.dedup();
+
+    settings
+        .update(|state| {
+            let target = match &id {
+                Some(id) => {
+                    &mut state
+                        .workflows
+                        .iter_mut()
+                        .find(|w| w.id == *id)
+                        .ok_or_else(|| crate::settings::SettingsError::UnknownWorkflow(id.clone()))?
+                        .settings
+                }
+                None => &mut state.defaults,
+            };
+            target.after_capture = after_capture.clone();
+            target.after_upload = after_upload.clone();
+            Ok(())
+        })
+        .map_err(err)?;
+
+    Ok(settings.snapshot())
 }
