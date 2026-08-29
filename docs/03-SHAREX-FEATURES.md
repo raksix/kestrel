@@ -381,7 +381,7 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 
 | # | Araç | Durum | Faz | Not |
 |---|---|:-:|:-:|---|
-| 1 | Renk seçici | `[ ]` | 5 | Hex/RGB/HSL/HSV, palet geçmişi |
+| 1 | Renk seçici | `[x]` | 5 | Hex/RGB/HSL/HSV/CMYK, alan ortalaması; palet geçmişi kaldı |
 | 2 | Ekran renk seçici | `[ ]` | 2 | Overlay + büyüteç |
 | 3 | Cetvel | `[ ]` | 5 | Mesafe ve açı ölçümü |
 | 4 | Ekrana sabitle (Pin to screen) | `[x]` | 2 | Ölçek, opaklık, kenarlık, çoklu pin |
@@ -390,7 +390,7 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | 7 | Görsel efektleri | `[ ]` | 5 | |
 | 8 | Görsel görüntüleyici | `[ ]` | 5 | |
 | 9 | Arka plan kaldırıcı | `[ ]` | 5 | ONNX modeli, uygulama içi indirme |
-| 10 | Görsel karşılaştırıcı | `[ ]` | 5 | Yan yana / geçiş / fark |
+| 10 | Görsel karşılaştırıcı | `[x]` | 5 | Yüzde + sınır dikdörtgeni + fark görseli; yan yana/geçiş kaldı |
 | 11 | Görsel birleştirici | `[ ]` | 5 | Dikey / yatay / ızgara |
 | 12 | Görsel bölücü | `[ ]` | 5 | Izgaraya böl |
 | 13 | Küçük resim üretici | `[ ]` | 5 | Toplu |
@@ -547,7 +547,7 @@ Tümü faz 6.
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
-| Araçlar | 25 | 9 | 0 | 16 |
+| Araçlar | 25 | 11 | 0 | 14 |
 | Workflow / otomasyon | 25 | 7 | 1 | 17 |
 | Geçmiş | 10 | 5 | 2 | 3 |
 | Ayarlar | 10 | 1 | 2 | 7 |

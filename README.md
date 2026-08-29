@@ -74,6 +74,10 @@ that language exactly, so those files work unmodified.
 - Metadata viewer that flags what identifies a person, place or device, and a
   stripper that writes a clean copy rather than touching the original
 - Directory indexing to HTML, text, JSON or XML
+- Colour picker: read a pixel from a capture — or an area average, for
+  anti-aliased text — in hex, RGB, HSL, HSV and CMYK at once
+- Image comparer: how much differs, where it differs, and a diff picture with
+  the original still visible underneath
 - OCR: read the text out of a capture and search for it later. Recognition
   runs locally, so nothing is sent anywhere. The ~20 MB models are downloaded
   on first use, and only after you say so
@@ -101,7 +105,7 @@ not capped at screen resolution.
 | 2 | Annotation editor, framing, pin to screen, post-capture card | ✅ |
 | 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
 | 4 | Screen recording, GIF, video tools | 🚧 audio and video tools left |
-| 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, seven tools done |
+| 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, nine tools done |
 | 6 | CLI, integrations, scrolling capture, 1.0 | ⏳ |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·

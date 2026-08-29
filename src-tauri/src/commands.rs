@@ -1101,3 +1101,63 @@ pub async fn ocr_install(app: AppHandle) -> Result<crate::ocr::ModelStatus, Stri
 pub fn ocr_last_capture(app: AppHandle) -> Result<kestrel_tools::ocr::Recognised, String> {
     crate::ocr::read_last(&app).map_err(err)
 }
+
+// ── Colour picker and image comparer ────────────────────────────────────
+
+/// Read the colour at a point in the last capture, in every notation at once.
+///
+/// `radius` averages a square around the point. On anti-aliased text the single
+/// pixel under the cursor is not the colour anyone means.
+#[tauri::command]
+pub fn pick_color(
+    app: AppHandle,
+    x: u32,
+    y: u32,
+    radius: Option<u32>,
+) -> Result<kestrel_tools::Swatch, String> {
+    let image = app
+        .state::<crate::editor::LastCapture>()
+        .get()
+        .ok_or("Renk seçmek için önce bir yakalama gerek.")?;
+
+    match radius.unwrap_or(0) {
+        0 => kestrel_tools::pick_color(&image, x, y),
+        radius => kestrel_tools::pick_average(&image, x, y, radius),
+    }
+    .ok_or_else(|| "Seçilen nokta görselin dışında.".to_string())
+}
+
+/// Convert a colour the user typed, so the panel works without a capture.
+#[tauri::command]
+pub fn parse_color(text: String) -> Result<kestrel_tools::Swatch, String> {
+    kestrel_tools::Rgb::from_hex(&text)
+        .map(|rgb| rgb.swatch())
+        .ok_or_else(|| format!("`{text}` bir renk değeri değil."))
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageComparison {
+    #[serde(flatten)]
+    pub summary: kestrel_tools::Comparison,
+    /// The diff picture, as a data URL for the preview.
+    pub preview: String,
+}
+
+/// Compare two image files and describe what differs.
+#[tauri::command]
+pub fn compare_images(
+    first: String,
+    second: String,
+    tolerance: Option<u8>,
+) -> Result<ImageComparison, String> {
+    let tolerance = tolerance.unwrap_or(kestrel_tools::compare::DEFAULT_TOLERANCE);
+    let a = image::open(&first).map_err(err)?.to_rgba8();
+    let b = image::open(&second).map_err(err)?.to_rgba8();
+
+    let summary = kestrel_tools::compare(&a, &b, tolerance);
+    let preview = capture_service::encode_preview(&kestrel_tools::diff_image(&a, &b, tolerance))
+        .map_err(err)?;
+
+    Ok(ImageComparison { summary, preview })
+}

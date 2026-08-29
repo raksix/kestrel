@@ -335,6 +335,49 @@ export interface Recognised {
   lines: OcrLine[];
 }
 
+// ── Colour picker ───────────────────────────────────────────────────────
+
+export interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+/** One colour in every notation, so the panel never has to ask again. */
+export interface Swatch {
+  rgb: Rgb;
+  hex: string;
+  /** Hue 0–360, saturation and lightness 0–100. */
+  hsl: [number, number, number];
+  hsv: [number, number, number];
+  cmyk: [number, number, number, number];
+  luminance: number;
+  /** Black or white, whichever stays readable on this colour. */
+  contrasting: Rgb;
+}
+
+export const pickColor = (x: number, y: number, radius?: number) =>
+  invoke<Swatch>("pick_color", { x, y, radius });
+export const parseColor = (text: string) => invoke<Swatch>("parse_color", { text });
+
+// ── Image comparer ──────────────────────────────────────────────────────
+
+export interface ImageComparison {
+  comparedWidth: number;
+  comparedHeight: number;
+  sizesDiffer: boolean;
+  changedPixels: number;
+  totalPixels: number;
+  differencePercent: number;
+  maxChannelDelta: number;
+  bounds: { x: number; y: number; width: number; height: number } | null;
+  /** The diff picture as a data URL. */
+  preview: string;
+}
+
+export const compareImages = (first: string, second: string, tolerance?: number) =>
+  invoke<ImageComparison>("compare_images", { first, second, tolerance });
+
 export const ocrStatus = () => invoke<OcrModelStatus>("ocr_status");
 export const ocrInstall = () => invoke<OcrModelStatus>("ocr_install");
 export const ocrLastCapture = () => invoke<Recognised>("ocr_last_capture");

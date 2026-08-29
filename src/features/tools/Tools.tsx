@@ -3,17 +3,22 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   analyzeLastCapture,
   compareHash,
+  compareImages,
   generateQrCode,
   hashFile,
   ocrInstall,
   ocrLastCapture,
   ocrStatus,
+  parseColor,
+  pickColor,
   scanQrCode,
   type Analysis,
   type DecodedQr,
   type FileHash,
+  type ImageComparison,
   type OcrModelStatus,
   type Recognised,
+  type Swatch,
 } from "../../lib/ipc";
 import "./tools.css";
 
@@ -21,6 +26,8 @@ export default function Tools() {
   return (
     <div className="stack">
       <QrTool />
+      <ColorTool />
+      <CompareTool />
       <OcrTool />
       <HashTool />
       <AnalyzeTool />
@@ -367,6 +374,266 @@ function OcrTool() {
             {result.lines.length} satır tanındı. Metin geçmişe de yazıldı, artık
             kütüphanede aratabilirsin.
           </p>
+        </>
+      )}
+
+      {error && (
+        <p className="status status--error" role="alert">
+          <span className="dot" aria-hidden="true" />
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+
+/**
+ * ShareX's colour picker.
+ *
+ * One colour in every notation at once, because the reason you picked it
+ * decides which one you need — CSS wants hex, a design tool wants HSL.
+ */
+function ColorTool() {
+  const [swatch, setSwatch] = useState<Swatch | null>(null);
+  const [hex, setHex] = useState("#4C8DFF");
+  const [point, setPoint] = useState({ x: 0, y: 0 });
+  const [radius, setRadius] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    parseColor(hex).then(setSwatch).catch(() => {
+      // A half-typed hex is not an error worth shouting about; the panel just
+      // keeps showing the last colour that parsed.
+    });
+  }, [hex]);
+
+  const fromCapture = async () => {
+    try {
+      const picked = await pickColor(point.x, point.y, radius || undefined);
+      setSwatch(picked);
+      setHex(picked.hex);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const rows: [string, string][] = swatch
+    ? [
+        ["HEX", swatch.hex],
+        ["RGB", `${swatch.rgb.r}, ${swatch.rgb.g}, ${swatch.rgb.b}`],
+        [
+          "HSL",
+          swatch.hsl.map((v, i) => (i === 0 ? Math.round(v) + "°" : Math.round(v) + "%")).join(", "),
+        ],
+        [
+          "HSV",
+          swatch.hsv.map((v, i) => (i === 0 ? Math.round(v) + "°" : Math.round(v) + "%")).join(", "),
+        ],
+        ["CMYK", swatch.cmyk.map((v) => Math.round(v) + "%").join(", ")],
+      ]
+    : [];
+
+  return (
+    <section className="card">
+      <h2 className="card__title">Renk seçici</h2>
+      <p className="card__hint">
+        Bir renk yaz, ya da son yakalamadaki bir noktadan al. Her gösterim
+        birden hesaplanır.
+      </p>
+
+      <label className="tools__row">
+        <span className="tools__label">Renk</span>
+        <input
+          type="color"
+          value={swatch?.hex ?? hex}
+          onChange={(e) => setHex(e.target.value)}
+        />
+        <input
+          className="input"
+          value={hex}
+          spellCheck={false}
+          onChange={(e) => setHex(e.target.value)}
+        />
+      </label>
+
+      {swatch && (
+        <div
+          className="color__preview"
+          style={{
+            background: swatch.hex,
+            color: `rgb(${swatch.contrasting.r}, ${swatch.contrasting.g}, ${swatch.contrasting.b})`,
+          }}
+        >
+          {swatch.hex}
+        </div>
+      )}
+
+      <table className="color__table">
+        <tbody>
+          {rows.map(([label, value]) => (
+            <tr key={label}>
+              <th scope="row">{label}</th>
+              <td>
+                <code>{value}</code>
+              </td>
+              <td>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => void navigator.clipboard.writeText(value)}
+                >
+                  Kopyala
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="tools__row">
+        <label className="tools__row">
+          <span className="tools__label">X</span>
+          <input
+            type="number"
+            className="input"
+            min={0}
+            value={point.x}
+            onChange={(e) => setPoint({ ...point, x: Math.max(0, Number(e.target.value)) })}
+          />
+        </label>
+        <label className="tools__row">
+          <span className="tools__label">Y</span>
+          <input
+            type="number"
+            className="input"
+            min={0}
+            value={point.y}
+            onChange={(e) => setPoint({ ...point, y: Math.max(0, Number(e.target.value)) })}
+          />
+        </label>
+        <label className="tools__row">
+          <span className="tools__label">Ortalama yarıçapı</span>
+          <input
+            type="number"
+            className="input"
+            min={0}
+            max={32}
+            value={radius}
+            onChange={(e) => setRadius(Math.max(0, Number(e.target.value)))}
+          />
+        </label>
+      </div>
+      <p className="card__hint">
+        Yarıçap 0 tek pikseli okur. Kenar yumuşatılmış yazıda tek piksel
+        genelde kimsenin kastettiği renk değildir; 1–2 vermek onu düzeltir.
+      </p>
+      <button type="button" className="button" onClick={fromCapture}>
+        Son yakalamadan al
+      </button>
+
+      {error && (
+        <p className="status status--error" role="alert">
+          <span className="dot" aria-hidden="true" />
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** ShareX's image comparer: how much changed, and where. */
+function CompareTool() {
+  const [first, setFirst] = useState<string | null>(null);
+  const [second, setSecond] = useState<string | null>(null);
+  const [tolerance, setTolerance] = useState(4);
+  const [result, setResult] = useState<ImageComparison | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = async (set: (path: string) => void) => {
+    const chosen = await open({
+      filters: [{ name: "Görsel", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }],
+    });
+    if (chosen && !Array.isArray(chosen)) set(chosen);
+  };
+
+  const run = async () => {
+    if (!first || !second) return;
+    try {
+      setResult(await compareImages(first, second, tolerance));
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+      setResult(null);
+    }
+  };
+
+  const name = (path: string | null) => path?.split(/[\\/]/).pop() ?? "seçilmedi";
+
+  return (
+    <section className="card">
+      <h2 className="card__title">Görsel karşılaştır</h2>
+      <p className="card__hint">
+        İki görselin farkını yüzde olarak ve resim üzerinde göster. Farklı
+        boyuttaki görseller ortak alanda karşılaştırılır.
+      </p>
+
+      <div className="tools__row">
+        <button type="button" className="button" onClick={() => void choose(setFirst)}>
+          1. görsel: {name(first)}
+        </button>
+        <button type="button" className="button" onClick={() => void choose(setSecond)}>
+          2. görsel: {name(second)}
+        </button>
+      </div>
+
+      <label className="tools__row">
+        <span className="tools__label">Tolerans</span>
+        <input
+          type="range"
+          min={0}
+          max={32}
+          value={tolerance}
+          onChange={(e) => setTolerance(Number(e.target.value))}
+        />
+        <span className="muted">{tolerance}</span>
+      </label>
+      <p className="card__hint">
+        Tolerans 0 yeniden kodlamadan gelen gürültüyü de fark sayar. Varsayılan
+        4, JPEG artefaktlarını yutup gerçek değişikliği yakalar.
+      </p>
+
+      <button
+        type="button"
+        className="button button--primary"
+        disabled={!first || !second}
+        onClick={run}
+      >
+        Karşılaştır
+      </button>
+
+      {result && (
+        <>
+          <p className="card__hint">
+            {result.changedPixels === 0
+              ? "Karşılaştırılan alanda fark yok."
+              : `%${result.differencePercent.toFixed(2)} farklı — ${result.changedPixels.toLocaleString("tr")} piksel, en büyük kanal farkı ${result.maxChannelDelta}.`}
+          </p>
+          {result.sizesDiffer && (
+            <p className="card__hint">
+              Boyutlar farklı; yalnızca {result.comparedWidth}×{result.comparedHeight}
+              ortak alan karşılaştırıldı.
+            </p>
+          )}
+          {result.bounds && (
+            <p className="card__hint">
+              Değişiklikler {result.bounds.x}, {result.bounds.y} noktasından
+              başlayan {result.bounds.width}×{result.bounds.height} dikdörtgenin
+              içinde.
+            </p>
+          )}
+          <img className="compare__preview" src={result.preview} alt="Fark görseli" />
         </>
       )}
 

@@ -67,3 +67,48 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
+
+/* ── Colour picker ──────────────────────────────────────────────────── */
+
+.color__preview {
+  display: grid;
+  place-items: center;
+  height: 4rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.color__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.color__table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: var(--space-1) 0;
+  width: 4rem;
+}
+
+.color__table td {
+  padding: var(--space-1) 0;
+}
+
+/* ── Image comparer ─────────────────────────────────────────────────── */
+
+.compare__preview {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  /* Nearest-neighbour so a one-pixel change stays visible when scaled down. */
+  image-rendering: pixelated;
+}
+
+/* Field captions inside a .tools__row, so a row can hold several inputs. */
+.tools__label {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
