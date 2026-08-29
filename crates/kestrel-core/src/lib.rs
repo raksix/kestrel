@@ -6,12 +6,14 @@
 
 pub mod model;
 pub mod name_pattern;
+pub mod rpc;
 
 pub use model::{
     default_workflows, AfterCaptureTask, AfterUploadTask, CaptureMethod, DestinationKinds,
     ImageFormat, TaskSettings, Workflow,
 };
 pub use name_pattern::{expand, expand_sanitized, Locale, NameContext};
+pub use rpc::{Endpoint, Envelope, Request, Response};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

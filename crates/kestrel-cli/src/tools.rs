@@ -11,6 +11,8 @@
 
 use std::process::ExitCode;
 
+use kestrel_core::rpc::Request;
+
 use crate::{Command, ConvertTarget, IndexFormat};
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -42,6 +44,43 @@ pub fn run(command: Command, json: bool) -> Result<ExitCode> {
         Command::Name { pattern, window } => name(&pattern, window),
         Command::Sxcu { path } => sxcu(&path, json),
         Command::Sxie { path } => sxie(&path, json),
+
+        // Everything below needs the app; `app::send` says so when it is not
+        // there rather than surfacing a connection error.
+        Command::Capture { what } => crate::app::send(
+            Request::Capture {
+                method: what.method(),
+            },
+            json,
+        ),
+        Command::Run { workflow } => crate::app::send(Request::RunWorkflow { workflow }, json),
+        Command::Upload { path, to } => crate::app::send(
+            Request::Upload {
+                path: path.to_string_lossy().into_owned(),
+                destination: to,
+            },
+            json,
+        ),
+        Command::Edit { path } => crate::app::send(
+            Request::Edit {
+                path: path.to_string_lossy().into_owned(),
+            },
+            json,
+        ),
+        Command::Pin { path } => crate::app::send(
+            Request::Pin {
+                path: path.to_string_lossy().into_owned(),
+            },
+            json,
+        ),
+        Command::Import { path } => crate::app::send(
+            Request::Import {
+                path: path.to_string_lossy().into_owned(),
+            },
+            json,
+        ),
+        Command::Show => crate::app::send(Request::Show, json),
+        Command::Ping => crate::app::send(Request::Ping, json),
     }
 }
 

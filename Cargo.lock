@@ -2658,13 +2658,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "kestrel"
+name = "kestrel-app"
 version = "0.1.0"
 dependencies = [
  "arboard",
  "base64 0.22.1",
  "chrono",
  "dirs",
+ "getrandom 0.4.3",
  "image",
  "kestrel-capture",
  "kestrel-core",
@@ -2706,6 +2707,7 @@ name = "kestrel-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "dirs",
  "image",
  "kestrel-core",
  "kestrel-editor",

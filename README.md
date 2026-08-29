@@ -121,7 +121,7 @@ not capped at screen resolution.
 | 3 | Uploaders, `.sxcu` engine, history, destinations | ✅ |
 | 4 | Screen recording, GIF, video tools | 🚧 cursor effects left |
 | 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, thirteen tools done |
-| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 CLI and watch folder done |
+| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 CLI, RPC and watch folder done |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·
 [`docs/01-FEATURE-PARITY.md`](docs/01-FEATURE-PARITY.md) ·
@@ -146,10 +146,20 @@ kestrel analyze shot.png --json | jq .dominant
 Results go to stdout and diagnostics to stderr, and the commands that answer a
 yes/no question exit non-zero for "no", so they compose with `&&` and `|`.
 
-The subcommands that would drive a *running* app — taking a screenshot,
-running a workflow, uploading — are not there yet: they need an IPC channel to
-the running instance that does not exist. Rather than ship them as stubs that
-fail at run time, `kestrel --help` advertises only what works.
+Other subcommands drive a *running* app:
+
+```bash
+kestrel capture region        # or fullscreen, window, monitor, active-window
+kestrel run "Tüm ekran"       # a workflow, by id or by name
+kestrel upload shot.png       # prints the URL
+kestrel edit shot.png         # opens the annotation editor
+kestrel ping                  # exits non-zero when the app is not running
+```
+
+These talk to the app over a loopback-only port, authenticated with a token in
+a file only your account can read. That token is what stops any local process
+from silently taking a screenshot, so it is not a formality — see
+`crates/kestrel-core/src/rpc.rs` for what it does and does not protect.
 
 ## Platform support
 

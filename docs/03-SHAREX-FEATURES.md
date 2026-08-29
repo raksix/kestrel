@@ -455,29 +455,29 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 
 | ShareX | Kestrel | Durum |
 |---|---|:-:|
-| `"dosya/URL yolu"` | `kestrel upload <yol>` | `[ ]` |
-| `-workflow "ad"` | `kestrel run "<ad>"` | `[ ]` |
+| `"dosya/URL yolu"` | `kestrel upload <yol>` | `[x]` |
+| `-workflow "ad"` | `kestrel run "<ad>"` | `[x]` |
 | `-task "ad"` | `kestrel upload <yol> --task "<ad>"` | `[ ]` |
-| `-RectangleRegion` vb. hotkey adları | `kestrel capture region` | `[ ]` |
+| `-RectangleRegion` vb. hotkey adları | `kestrel capture region` | `[x]` |
 | `-portable` / `-p` | `--portable` | `[ ]` |
 | `-silent` / `-s` | `--silent` | `[ ]` |
 | `-multi` / `-m` | `--multi` | `[ ]` |
 | `-sandbox` | `--ephemeral` | `[ ]` |
 | `-autoclose` | `--autoclose` | `[ ]` |
 | `-nohotkeys` | `--no-hotkeys` | `[ ]` |
-| `-customuploader "<.sxcu>"` | `kestrel import <dosya>` | `[ ]` |
-| `-imageeffect "<.sxie>"` | aynı komut | `[ ]` |
-| `-ImageEditor`, `-PinToScreen` | çalışan uygulama gerekli | `[ ]` |
+| `-customuploader "<.sxcu>"` | `kestrel import <dosya>` | `[x]` |
+| `-imageeffect "<.sxie>"` | aynı komut | `[x]` |
+| `-ImageEditor`, `-PinToScreen` | `kestrel edit\|pin <yol>` | `[x]` |
 | `-OCR`, `-QRCode`, `-HashCheck`, `-Metadata`, `-VideoConverter` | `kestrel ocr\|qr\|hash\|metadata\|convert <yol>` | `[x]` |
 
 Ek olarak Kestrel'de: `compare`, `color`, `analyze`, `index`, `thumbnail`,
 `name`, `sxcu`, `sxie` ve her komutta `--json`.
 
-**Neden yarısı boş:** dosyayla çalışan komutlar bitti, uygulamayı süren
-komutlar (yakalama, workflow çalıştırma, yükleme) çalışan örneğe bağlanacak
-bir IPC kanalı istiyor ve o kanal henüz yok. Çalışmayacak komutları `--help`'e
-yazmak, yokluklarından kötü olurdu; bu yüzden CLI yalnızca yapabildiğini
-duyuruyor.
+Uygulamayı süren komutlar, yalnızca loopback'e bağlı bir porta ve config
+dizinindeki 0600 izinli dosyada duran bir jetona dayanır. Jeton biçimsel
+değil: onsuz herhangi bir yerel süreç sessizce ekran görüntüsü aldırabilirdi.
+Neyi koruduğu ve neyi korumadığı `crates/kestrel-core/src/rpc.rs` başında
+yazıyor.
 
 ### 12.2 Sistem entegrasyonu
 

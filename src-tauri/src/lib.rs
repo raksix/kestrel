@@ -12,6 +12,7 @@ mod ocr;
 mod overlay;
 mod pin;
 mod record;
+mod rpc;
 mod settings;
 mod shortcuts;
 mod uploads;
@@ -147,10 +148,18 @@ pub fn run() {
             build_tray(app.handle())?;
             shortcuts::reregister(app.handle());
             resume_watch(app.handle());
+            rpc::serve(app.handle());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Kestrel");
+        .build(tauri::generate_context!())
+        .expect("error while running Kestrel")
+        .run(|_app, event| {
+            // Drop the endpoint file on the way out, so `kestrel capture`
+            // reports "not running" instead of failing to reach a dead port.
+            if matches!(event, tauri::RunEvent::Exit) {
+                rpc::withdraw();
+            }
+        });
 }
 
 /// Restart the watch folder if it was on when the app last quit.
@@ -294,7 +303,7 @@ fn open_editor(app: &AppHandle) {
     }
 }
 
-fn show_main_window(app: &AppHandle) {
+pub fn show_main_window(app: &AppHandle) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(window) = handle.get_webview_window("main") {

@@ -4,18 +4,17 @@
 //! subcommand here calls exactly the same code the app calls, so the two cannot
 //! drift apart and neither is the "real" implementation.
 //!
-//! **Scope.** These are the tools that need nothing but a file. The subcommands
-//! that drive a running app — taking a screenshot, running a workflow, opening
-//! the editor — are not here yet, because they need an IPC channel to the
-//! running instance that does not exist. Shipping them as stubs that fail at
-//! run time would be worse than their absence, so `kestrel --help` does not
-//! advertise what it cannot do.
+//! **Two kinds of subcommand.** Most need nothing but a file, and run entirely
+//! in this process. The rest — capture, run, upload, edit, pin, import, show —
+//! drive a *running* app over the local channel in `kestrel_core::rpc`, and
+//! report plainly when there is nothing to drive.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 
+mod app;
 mod tools;
 
 #[derive(Parser)]
@@ -138,6 +137,70 @@ enum Command {
 
     /// Show what a ShareX `.sxie` effect preset contains.
     Sxie { path: PathBuf },
+
+    // ── Commands that drive a running app ───────────────────────────────
+    /// Take a capture. Needs Kestrel to be running.
+    Capture {
+        #[arg(value_enum, default_value_t = CaptureKind::Region)]
+        what: CaptureKind,
+    },
+
+    /// Run a configured workflow, by id or by name.
+    Run { workflow: String },
+
+    /// Upload a file through Kestrel's configured destination.
+    Upload {
+        path: PathBuf,
+        /// Destination id, if not the default one.
+        #[arg(long)]
+        to: Option<String>,
+    },
+
+    /// Open an image in Kestrel's annotation editor.
+    Edit { path: PathBuf },
+
+    /// Pin an image above every other window.
+    Pin { path: PathBuf },
+
+    /// Import a `.sxcu` uploader or a `.sxie` effect preset into the app.
+    Import { path: PathBuf },
+
+    /// Bring Kestrel's window forward.
+    Show,
+
+    /// Check whether Kestrel is running. Exits non-zero when it is not.
+    Ping,
+}
+
+/// The capture methods that make sense from a command line.
+///
+/// The interactive ones are here because "start a region selection" is a
+/// perfectly good thing to bind to a key in another tool.
+#[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
+enum CaptureKind {
+    Region,
+    Fullscreen,
+    Window,
+    Monitor,
+    /// The front-most window, with no picker.
+    ActiveWindow,
+    Record,
+    RecordGif,
+}
+
+impl CaptureKind {
+    fn method(self) -> kestrel_core::CaptureMethod {
+        use kestrel_core::CaptureMethod as M;
+        match self {
+            CaptureKind::Region => M::Region,
+            CaptureKind::Fullscreen => M::Fullscreen,
+            CaptureKind::Window => M::WindowMenu,
+            CaptureKind::Monitor => M::MonitorMenu,
+            CaptureKind::ActiveWindow => M::ActiveWindow,
+            CaptureKind::Record => M::ScreenRecording,
+            CaptureKind::RecordGif => M::ScreenRecordingGif,
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]

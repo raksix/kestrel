@@ -22,6 +22,7 @@ image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 clap = { version = "4", features = ["derive"] }
+dirs = "6"
 
 [dev-dependencies]
 # The tests build fixtures and read back what the CLI wrote.

@@ -188,6 +188,16 @@ pub async fn upload_path(
     path: &Path,
     prompter: &dyn Prompter,
 ) -> Result<Uploaded> {
+    upload_path_to(app, path, None, prompter).await
+}
+
+/// Upload a file to a named destination, or to the configured default.
+pub async fn upload_path_to(
+    app: &tauri::AppHandle,
+    path: &Path,
+    destination: Option<String>,
+    prompter: &dyn Prompter,
+) -> Result<Uploaded> {
     use tauri::Manager;
 
     let bytes = std::fs::read(path)?;
@@ -196,11 +206,12 @@ pub async fn upload_path(
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| "upload".to_string());
 
-    let configured = app
-        .state::<crate::settings::SettingsState>()
-        .snapshot()
-        .default_destination
-        .clone();
+    let configured = destination.or_else(|| {
+        app.state::<crate::settings::SettingsState>()
+            .snapshot()
+            .default_destination
+            .clone()
+    });
     let destination = resolve_destination(configured)?;
 
     let payload = if is_text(path) {
