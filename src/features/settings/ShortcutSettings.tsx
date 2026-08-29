@@ -121,6 +121,7 @@ export default function ShortcutSettings({
         {workflows.map((workflow) => {
           const report = reportFor(workflow.id);
           const failed = workflow.enabled && report && !report.registered;
+          const stolen = workflow.enabled && report?.systemConflict;
           const isRecording = recording === workflow.id;
 
           return (
@@ -149,12 +150,18 @@ export default function ShortcutSettings({
                     Kayıt edilemedi — başka bir uygulama bu kısayolu almış
                   </span>
                 )}
+                {!failed && stolen && (
+                  <span className="shortcut-row__warning">
+                    İşletim sistemi bu kısayolu kullanıyor ({report?.systemConflict}), tuşa
+                    bastığında Kestrel'e ulaşmaz. Başka bir birleşim seç.
+                  </span>
+                )}
               </div>
 
               <button
                 type="button"
                 className={`shortcut-key ${isRecording ? "shortcut-key--recording" : ""} ${
-                  failed ? "shortcut-key--failed" : ""
+                  failed || stolen ? "shortcut-key--failed" : ""
                 }`}
                 onClick={() => setRecording(isRecording ? null : workflow.id)}
                 aria-label={`${workflow.name} kısayolunu değiştir`}

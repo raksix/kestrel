@@ -10,6 +10,7 @@ use kestrel_core::{
     model::{default_workflows, CaptureMethod, TaskSettings, Workflow},
     name_pattern::{self, NameContext},
 };
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::capture_service::{self, CaptureOutput};
@@ -152,6 +153,83 @@ pub fn display_thumbnail(id: u32) -> Result<String, String> {
     require_permission()?;
     let capture = backend().capture_display(id).map_err(err)?;
     capture_service::encode_preview(&capture.image).map_err(err)
+}
+
+/// One entry in the picker grid, thumbnail included.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetPreview {
+    pub id: u32,
+    pub title: String,
+    pub subtitle: String,
+    pub width: u32,
+    pub height: u32,
+    /// `None` when this target could not be rendered (a window that closed
+    /// while we were scanning, for instance).
+    pub preview: Option<String>,
+}
+
+/// Everything the picker needs, from a single screen grab.
+///
+/// Capturing each window separately meant one real screen capture per window —
+/// on a busy desktop that is thirty of them, and the picker crawled. We freeze
+/// once and crop, which is a single capture plus some memory copies.
+///
+/// The trade-off is that a thumbnail shows whatever was on top of the window at
+/// that moment. That is fine for a preview; choosing the entry still performs a
+/// proper isolated window capture.
+#[tauri::command]
+pub fn list_window_previews() -> Result<Vec<TargetPreview>, String> {
+    require_permission()?;
+    let backend = backend();
+    let windows = backend.windows().map_err(err)?;
+    let frames = backend.freeze().map_err(err)?;
+
+    Ok(windows
+        .into_iter()
+        .map(|window| TargetPreview {
+            id: window.id,
+            title: if window.title.is_empty() {
+                window.app_name.clone()
+            } else {
+                window.title.clone()
+            },
+            subtitle: window.app_name,
+            width: window.region.width,
+            height: window.region.height,
+            preview: frames
+                .crop(window.region)
+                .ok()
+                .and_then(|c| capture_service::encode_preview(&c.image).ok()),
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn list_display_previews() -> Result<Vec<TargetPreview>, String> {
+    require_permission()?;
+    let backend = backend();
+    let displays = backend.displays().map_err(err)?;
+    let frames = backend.freeze().map_err(err)?;
+
+    Ok(displays
+        .into_iter()
+        .map(|display| TargetPreview {
+            id: display.id,
+            title: display.name,
+            subtitle: if display.is_primary {
+                "Birincil ekran".to_string()
+            } else {
+                "Ekran".to_string()
+            },
+            width: display.region.width,
+            height: display.region.height,
+            preview: frames
+                .display(display.id)
+                .ok()
+                .and_then(|c| capture_service::encode_preview(&c.image).ok()),
+        })
+        .collect())
 }
 
 // ── Region selection ────────────────────────────────────────────────────

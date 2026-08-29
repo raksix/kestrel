@@ -82,12 +82,58 @@ pub fn load() -> AppSettings {
     };
 
     match serde_json::from_str::<AppSettings>(&text) {
-        Ok(settings) => settings,
+        Ok(mut settings) => {
+            migrate(&mut settings);
+            settings
+        }
         Err(err) => {
             tracing::error!(%err, "settings file is corrupt, backing it up and starting fresh");
             let backup = path.with_extension("json.corrupt");
             let _ = std::fs::rename(&path, backup);
             AppSettings::default()
+        }
+    }
+}
+
+/// Bring an older settings file up to date.
+///
+/// The only migration so far: early builds shipped defaults bound to
+/// Cmd+Shift+3/4/5, which macOS keeps for itself. Those shortcuts look fine in
+/// the UI but never fire, so anyone who ran those builds is silently left with
+/// dead keys. Rebind them to the current default rather than making the user
+/// work out what went wrong.
+fn migrate(settings: &mut AppSettings) {
+    let defaults = default_workflows();
+
+    for workflow in settings.workflows.iter_mut() {
+        let Some(accelerator) = workflow.shortcut.as_deref() else {
+            continue;
+        };
+        let Some(owner) = kestrel_core::model::system_reserved(accelerator) else {
+            continue;
+        };
+
+        let replacement = defaults
+            .iter()
+            .find(|d| d.id == workflow.id)
+            .and_then(|d| d.shortcut.clone())
+            // Do not swap one reserved shortcut for another.
+            .filter(|a| kestrel_core::model::system_reserved(a).is_none());
+
+        tracing::info!(
+            workflow = %workflow.id,
+            from = accelerator,
+            to = replacement.as_deref().unwrap_or("(kaldırıldı)"),
+            %owner,
+            "rebinding a shortcut the operating system reserves"
+        );
+        workflow.shortcut = replacement;
+    }
+
+    // Workflows added after the user's settings file was written.
+    for default in defaults {
+        if !settings.workflows.iter().any(|w| w.id == default.id) {
+            settings.workflows.push(default);
         }
     }
 }
@@ -184,6 +230,49 @@ mod tests {
         let before = bindable(&settings);
         settings.workflows[0].enabled = false;
         assert_eq!(bindable(&settings), before - 1);
+    }
+
+    #[test]
+    fn migration_rebinds_shortcuts_the_os_reserves() {
+        let mut settings = AppSettings::default();
+        // What the first release shipped, and what macOS swallows.
+        settings.workflows[0].shortcut = Some("CmdOrCtrl+Shift+4".into());
+
+        migrate(&mut settings);
+
+        let bound = settings.workflows[0].shortcut.as_deref();
+        assert_ne!(bound, Some("CmdOrCtrl+Shift+4"));
+        if let Some(bound) = bound {
+            assert_eq!(
+                kestrel_core::model::system_reserved(bound),
+                None,
+                "must not swap one reserved shortcut for another"
+            );
+        }
+    }
+
+    #[test]
+    fn migration_leaves_a_usable_shortcut_alone() {
+        let mut settings = AppSettings::default();
+        settings.workflows[0].shortcut = Some("CmdOrCtrl+Alt+K".into());
+
+        migrate(&mut settings);
+
+        assert_eq!(
+            settings.workflows[0].shortcut.as_deref(),
+            Some("CmdOrCtrl+Alt+K"),
+            "a shortcut the user chose must survive"
+        );
+    }
+
+    #[test]
+    fn migration_adds_workflows_introduced_later() {
+        let mut settings = AppSettings::default();
+        let removed = settings.workflows.pop().expect("has workflows");
+
+        migrate(&mut settings);
+
+        assert!(settings.workflows.iter().any(|w| w.id == removed.id));
     }
 
     #[test]

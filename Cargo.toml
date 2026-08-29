@@ -22,3 +22,18 @@ chrono = "0.4"
 rand = "0.8"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp", "tiff"] }
 xcap = "0.9"
+
+# A debug build of this app spends nearly all its time inside `image`, and at
+# opt-level 0 a single Retina screenshot takes seconds. Optimising dependencies
+# fully (they are rebuilt rarely) and our own crates lightly keeps `tauri dev`
+# responsive without hurting incremental rebuild times.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

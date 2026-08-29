@@ -192,31 +192,53 @@ impl Workflow {
 
 /// The default workflow set a fresh install ships with.
 pub fn default_workflows() -> Vec<Workflow> {
+    // Shortcut choice matters: macOS reserves Cmd+Shift+3/4/5/6 for its own
+    // screenshot tools and consumes them before any application sees them, so
+    // binding those would give the user dead keys. See `SYSTEM_RESERVED`.
     vec![
         Workflow::new("capture-region", "Bölge yakala", CaptureMethod::Region)
             .with_shortcut("CmdOrCtrl+Shift+2"),
         Workflow::new("capture-fullscreen", "Tüm ekran", CaptureMethod::Fullscreen)
-            .with_shortcut("CmdOrCtrl+Shift+3"),
+            .with_shortcut("CmdOrCtrl+Shift+1"),
         // Opens the picker. ShareX calls this "window menu"; it is the one
-        // people actually reach for, so it gets the memorable shortcut.
+        // people actually reach for.
         Workflow::new("capture-window", "Pencere seç", CaptureMethod::WindowMenu)
-            .with_shortcut("CmdOrCtrl+Shift+4"),
-        Workflow::new(
-            "record-screen",
-            "Ekran kaydı",
-            CaptureMethod::ScreenRecording,
-        )
-        .with_shortcut("CmdOrCtrl+Shift+5"),
+            .with_shortcut("CmdOrCtrl+Shift+7"),
         // No picker: grabs whatever is in front right now.
         Workflow::new(
             "capture-active-window",
             "Aktif pencere",
             CaptureMethod::ActiveWindow,
         )
-        .with_shortcut("CmdOrCtrl+Shift+6"),
+        .with_shortcut("CmdOrCtrl+Shift+8"),
         Workflow::new("capture-monitor", "Ekran seç", CaptureMethod::MonitorMenu)
-            .with_shortcut("CmdOrCtrl+Shift+7"),
+            .with_shortcut("CmdOrCtrl+Shift+9"),
+        Workflow::new(
+            "record-screen",
+            "Ekran kaydı",
+            CaptureMethod::ScreenRecording,
+        )
+        .with_shortcut("CmdOrCtrl+Shift+0"),
     ]
+}
+
+/// Accelerators the operating system claims for itself.
+///
+/// These *register* successfully — Carbon happily hands out the binding — but
+/// the OS consumes the key press first, so the app is never told. There is no
+/// API to detect this, so the list is maintained by hand and surfaced as a
+/// warning rather than silently leaving the user with a dead shortcut.
+pub fn system_reserved(accelerator: &str) -> Option<&'static str> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    match accelerator {
+        "CmdOrCtrl+Shift+3" => Some("macOS: tüm ekranın görüntüsünü al"),
+        "CmdOrCtrl+Shift+4" => Some("macOS: seçilen bölgenin görüntüsünü al"),
+        "CmdOrCtrl+Shift+5" => Some("macOS: ekran görüntüsü ve kayıt penceresi"),
+        "CmdOrCtrl+Shift+6" => Some("macOS: Touch Bar görüntüsü"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -239,6 +261,21 @@ mod tests {
                 AfterCaptureTask::UploadImageToHost,
             ]
         );
+    }
+
+    #[test]
+    fn no_default_shortcut_collides_with_the_operating_system() {
+        for workflow in default_workflows() {
+            let Some(accelerator) = workflow.shortcut.as_deref() else {
+                continue;
+            };
+            assert_eq!(
+                system_reserved(accelerator),
+                None,
+                "{} is bound to {accelerator}, which the OS swallows",
+                workflow.id
+            );
+        }
     }
 
     #[test]

@@ -34,8 +34,20 @@ fn main() {
         Err(e) => println!("windows FAILED: {e}"),
     }
 
+    let t = std::time::Instant::now();
     match b.capture_all_displays() {
-        Ok(c) => println!("capture_all: {}x{}", c.width(), c.height()),
+        Ok(c) => println!(
+            "capture_all: {}x{} in {:?}",
+            c.width(),
+            c.height(),
+            t.elapsed()
+        ),
         Err(e) => println!("capture_all FAILED: {e}"),
+    }
+
+    let t = std::time::Instant::now();
+    match b.freeze() {
+        Ok(f) => println!("freeze: {} display(s) in {:?}", f.displays().len(), t.elapsed()),
+        Err(e) => println!("freeze FAILED: {e}"),
     }
 }

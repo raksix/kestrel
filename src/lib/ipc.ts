@@ -97,6 +97,11 @@ export interface ShortcutReport {
   accelerator: string;
   registered: boolean;
   error: string | null;
+  /**
+   * Set when the OS owns this combination. Registration succeeds but the key
+   * press never arrives, so this is the only signal the user gets.
+   */
+  systemConflict: string | null;
 }
 
 export const CAPTURE_COMPLETE = "kestrel://capture-complete";
@@ -121,6 +126,24 @@ export const captureWindow = (id: number) => invoke<CaptureOutput>("capture_wind
 export const captureActiveWindow = () => invoke<CaptureOutput>("capture_active_window");
 export const windowThumbnail = (id: number) => invoke<string>("window_thumbnail", { id });
 export const displayThumbnail = (id: number) => invoke<string>("display_thumbnail", { id });
+
+/** One picker entry, thumbnail included. */
+export interface TargetPreview {
+  id: number;
+  title: string;
+  subtitle: string;
+  width: number;
+  height: number;
+  preview: string | null;
+}
+
+/**
+ * Both of these come from a single screen grab on the Rust side. Fetching a
+ * thumbnail per window meant one real capture per window, which made the
+ * picker crawl on a busy desktop.
+ */
+export const listWindowPreviews = () => invoke<TargetPreview[]>("list_window_previews");
+export const listDisplayPreviews = () => invoke<TargetPreview[]>("list_display_previews");
 
 // ── Region selection ────────────────────────────────────────────────────
 export const beginRegionCapture = () => invoke<void>("begin_region_capture");

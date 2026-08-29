@@ -179,6 +179,19 @@ impl CaptureBackend for XcapBackend {
 
     fn capture_all_displays(&self) -> Result<Capture> {
         let monitors = Monitor::all()?;
+
+        // One display is the common case; compositing it into a fresh canvas
+        // would double the work and the peak memory for no benefit.
+        if let [monitor] = monitors.as_slice() {
+            let info = Self::display_info(monitor)?;
+            return Ok(Capture {
+                image: monitor.capture_image()?,
+                region: info.region,
+                window_title: None,
+                app_name: None,
+            });
+        }
+
         let infos: Vec<DisplayInfo> = monitors
             .iter()
             .filter_map(|m| Self::display_info(m).ok())
@@ -260,15 +273,12 @@ fn is_wayland() -> bool {
 }
 
 /// Copy `src` onto `dst` at the given offset, clipping at the canvas edges.
+///
+/// Delegates to `imageops::replace`, which copies row-wise and handles
+/// out-of-bounds placement. The previous hand-rolled per-pixel loop cost
+/// seconds on a multi-megapixel frame in a debug build.
 fn overlay(dst: &mut RgbaImage, src: &RgbaImage, offset_x: i32, offset_y: i32) {
-    for (sx, sy, pixel) in src.enumerate_pixels() {
-        let dx = offset_x + sx as i32;
-        let dy = offset_y + sy as i32;
-        if dx < 0 || dy < 0 || dx >= dst.width() as i32 || dy >= dst.height() as i32 {
-            continue;
-        }
-        dst.put_pixel(dx as u32, dy as u32, *pixel);
-    }
+    image::imageops::replace(dst, src, offset_x as i64, offset_y as i64);
 }
 
 #[cfg(test)]

@@ -41,7 +41,7 @@ pub fn run() {
         .plugin(shortcuts::plugin())
         .manage(settings::SettingsState::new())
         .manage(overlay::OverlayState::default())
-        .manage(shortcuts::ShortcutState_::default())
+        .manage(shortcuts::ShortcutRegistry::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_displays,
             commands::list_windows,
@@ -55,6 +55,8 @@ pub fn run() {
             commands::capture_active_window,
             commands::window_thumbnail,
             commands::display_thumbnail,
+            commands::list_window_previews,
+            commands::list_display_previews,
             commands::begin_region_capture,
             commands::commit_region_capture,
             commands::cancel_region_capture,
