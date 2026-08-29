@@ -232,6 +232,7 @@ export const removeUploader = (id: string) =>
   invoke<Destination[]>("remove_uploader", { id });
 export const setDefaultDestination = (id: string | null) =>
   invoke<void>("set_default_destination", { id });
+export const defaultDestination = () => invoke<string | null>("default_destination");
 export const uploadLastCapture = (destination?: string) =>
   invoke<Uploaded>("upload_last_capture", { destination });
 

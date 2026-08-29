@@ -37,6 +37,13 @@ xcap = "0.9"
 # responsive without hurting incremental rebuild times.
 [profile.dev]
 opt-level = 1
+# Incremental compilation and optimisation together produce stale anonymous
+# LLVM symbols across codegen units, which surfaces as an intermittent
+# "symbol(s) not found" link failure that only a `cargo clean` clears. A build
+# that sometimes refuses to link is far worse than a slightly slower one, and
+# our own crates are small — the expensive dependencies are cached at
+# opt-level 3 regardless.
+incremental = false
 
 [profile.dev.package."*"]
 opt-level = 3

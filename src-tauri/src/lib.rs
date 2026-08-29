@@ -48,7 +48,6 @@ pub fn run() {
         .manage(overlay::OverlayState::default())
         .manage(editor::EditorState::default())
         .manage(editor::LastCapture::default())
-        .manage(uploads::DefaultDestination::default())
         .manage(history::History::open())
         .manage(history::LastEntryId::default())
         .manage(shortcuts::ShortcutRegistry::default())
@@ -90,6 +89,7 @@ pub fn run() {
             commands::import_uploader,
             commands::remove_uploader,
             commands::set_default_destination,
+            commands::default_destination,
             commands::upload_last_capture,
             commands::upload_text,
             commands::history_list,

@@ -252,6 +252,7 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | Yanıt ayrıştırma (URL, thumb, silme, hata) | `[x]` |
 | HTTP yürütme (multipart, form, JSON, XML, binary) | `[x]` |
 | Hedef deposu ve içe aktarma | `[x]` |
+| Sürükle-bırak içe aktarma | `[x]` |
 | Dosya ilişkilendirme (`.sxcu` çift tıklama) | `[ ]` |
 | İstek/yanıt inspector'ı | `[ ]` |
 
@@ -493,7 +494,7 @@ Tümü faz 6.
 | Yakalama | Overlay davranışı, imleç, gecikme, ses | `[ ]` faz 2 |
 | Kayıt | Codec, fps, kalite, ses, imleç efektleri | `[ ]` faz 4 |
 | Editör | Varsayılan araç, renkler, font, davranışlar | `[ ]` faz 2 |
-| Hedefler | Servis listesi + yapılandırma + custom uploader | `[ ]` faz 3 |
+| Hedefler | Servis listesi + yapılandırma + custom uploader | `[~]` faz 3 |
 | Dosyalar | Kaydetme yeri, adlandırma, format, kalite | `[~]` faz 1 |
 | Eylemler | Harici program tanımları | `[ ]` faz 5 |
 | Gizlilik | İzin durumları, veri temizleme, telemetri | `[~]` faz 1 |

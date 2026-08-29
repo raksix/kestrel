@@ -2,9 +2,10 @@
 
 Cross-platform capture, annotation and sharing — a ShareX-class tool for macOS, Windows and Linux.
 
-> **Status: early development (phase 1).** The capture core, filename engine and
-> app shell work. The annotation editor, uploaders and recording are on the
-> roadmap below. Not ready for daily use yet.
+> **Status: early development.** Capture, annotation and `.sxcu` uploading work.
+> Screen recording, OCR and most of the standalone tools do not exist yet — see
+> the roadmap. Usable for taking and marking up screenshots; not yet a
+> replacement for ShareX.
 
 ## Why
 
@@ -24,20 +25,43 @@ that language exactly, so those files work unmodified.
 
 ## What it does today
 
+**Capture**
 - Full-screen, per-display and window capture on macOS, Windows, X11 and Wayland
-- **Region selection overlay** — drag to select, or click a window to snap to it,
-  with live size readout, crosshair and keyboard nudging
-- **Window / display picker** with live thumbnails, keyboard navigable
+- Region overlay: drag to select, or click a window to snap to it, with a live
+  size readout, crosshair and keyboard nudging
+- Draw on the overlay before capturing — rectangle, ellipse, arrow, line,
+  freehand, step numbers, highlight, blur and pixelate
+- Window and display picker with live thumbnails, keyboard navigable
 - Multi-display capture with correct mixed-DPI compositing
-- **Editable global shortcuts**, with conflict detection and a report of which
+
+**Annotate**
+- Editor with twelve tools and ShareX's keyboard letters, non-destructive so a
+  document can be reopened and re-edited
+- Text with a system font and an outline, multi-line, typed into a real
+  textarea so input methods and screen readers keep working
+- Crop, padding, rounded corners, drop shadow, and solid or gradient
+  backgrounds — ShareX's crop tool and image beautifier
+- Undo and redo across annotations and framing alike
+
+**Share**
+- ShareX `.sxcu` custom uploaders work unmodified: all thirteen template
+  functions, every body type, every request method
+- Drag a `.sxcu` onto the window to import it
+- Multipart, form-urlencoded, JSON, XML and binary uploads
+
+**Organise**
+- Capture history in SQLite, searchable by filename, window title, URL and
+  recognised text
+- Library grouped by day, with copy URL, open, copy path and remove
+- Editable global shortcuts with conflict detection and a report of which
   bindings the OS actually accepted
 - ShareX-compatible filename patterns (all 37 tokens) with a live preview
-- Screen-recording permission detection and guided setup on macOS
-- System tray menu, save to disk, copy to clipboard
 - Settings persisted as readable JSON in the platform config directory
 
-Selections are cropped from a snapshot taken *before* the overlay appears, so the
-overlay's own dimming can never end up in the capture.
+Selections are cropped from a snapshot taken *before* the overlay appears, so
+the overlay's own dimming can never end up in the capture. The exported file is
+rendered in Rust, not the webview, so it looks the same on every platform and is
+not capped at screen resolution.
 
 ## Roadmap
 
@@ -45,8 +69,8 @@ overlay's own dimming can never end up in the capture.
 |---|---|---|
 | 0 | Project shell, design system, CI, settings, tray | ✅ |
 | 1 | Capture backends, region overlay, shortcuts | ✅ |
-| 2 | Annotation editor, pin to screen, post-capture card | ⏳ |
-| 3 | Uploaders, `.sxcu` engine, workflows, history | ⏳ |
+| 2 | Annotation editor, framing, post-capture card | 🚧 pin to screen left |
+| 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
 | 4 | Screen recording, GIF, video tools | ⏳ |
 | 5 | The remaining 24 tools, effect chain, OCR | ⏳ |
 | 6 | CLI, integrations, scrolling capture, 1.0 | ⏳ |
@@ -82,11 +106,17 @@ npm install
 npm run tauri dev
 ```
 
-Run the Rust test suite:
+Run the test suite:
 
 ```bash
-cargo test
+cargo test --workspace
+npm run build
 ```
+
+The dev profile builds dependencies at `opt-level = 3` and disables incremental
+compilation. Without the first, a single Retina screenshot takes seconds to
+process; without the second, incremental and optimisation together produce
+stale symbols and an intermittent link failure.
 
 Linux also needs the usual Tauri system dependencies (`libwebkit2gtk-4.1-dev`,
 `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`).
@@ -100,8 +130,10 @@ window list. Kestrel detects this and says so instead of appearing broken.
 ```
 crates/kestrel-core      domain model, workflows, filename tokens (no UI, no Tauri)
 crates/kestrel-capture   platform capture backends behind one trait
-src-tauri                thin desktop shell: tray, shortcuts, overlay, IPC
-src                      React UI: main window, selection overlay, picker
+crates/kestrel-editor    annotation model, history, and the export renderer
+crates/kestrel-upload    .sxcu template engine, file format, HTTP transport
+src-tauri                desktop shell: tray, shortcuts, windows, history, IPC
+src                      React UI: main window, overlay, picker, editor
 ```
 
 `kestrel-core` never imports a UI framework, so the CLI and the test suite use
@@ -109,8 +141,9 @@ the same logic the app does.
 
 ## Contributing
 
-Issues and pull requests are welcome. Adding an uploader is intentionally the
-easiest contribution: implement one trait, add a request/response fixture.
+Issues and pull requests are welcome. The easiest useful contribution is not
+Rust at all: a `.sxcu` file for a service Kestrel does not cover yet already
+works, because the format is implemented exactly.
 
 ## License
 

@@ -18,6 +18,9 @@ pub struct AppSettings {
     pub version: u32,
     pub workflows: Vec<Workflow>,
     pub defaults: TaskSettings,
+    /// Destination used when a workflow does not name one. Lives here rather
+    /// than in memory so the choice survives a restart.
+    pub default_destination: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -26,6 +29,7 @@ impl Default for AppSettings {
             version: 1,
             workflows: default_workflows(),
             defaults: TaskSettings::default(),
+            default_destination: None,
         }
     }
 }

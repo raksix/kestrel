@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Destinations from "./features/destinations/Destinations";
 import Library from "./features/library/Library";
 import PermissionGate from "./features/settings/PermissionGate";
 import ShortcutSettings from "./features/settings/ShortcutSettings";
@@ -18,12 +19,13 @@ import {
   type Workflow,
 } from "./lib/ipc";
 
-type Section = "capture" | "shortcuts" | "library";
+type Section = "capture" | "shortcuts" | "library" | "destinations";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "capture", label: "Yakala" },
   { id: "shortcuts", label: "Kısayollar" },
   { id: "library", label: "Kütüphane" },
+  { id: "destinations", label: "Hedefler" },
 ];
 
 /** Human wording for each capture method, used as tile subtitles. */
@@ -179,6 +181,7 @@ export default function App() {
               <ShortcutSettings workflows={workflows} onWorkflowsChanged={setWorkflows} />
             )}
             {section === "library" && <Library />}
+            {section === "destinations" && <Destinations />}
           </div>
         </div>
       </main>

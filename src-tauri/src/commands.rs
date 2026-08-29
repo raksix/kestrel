@@ -557,8 +557,21 @@ pub fn remove_uploader(id: String) -> Result<Vec<crate::uploads::Destination>, S
 }
 
 #[tauri::command]
-pub fn set_default_destination(app: AppHandle, id: Option<String>) {
-    app.state::<crate::uploads::DefaultDestination>().set(id);
+pub fn set_default_destination(
+    id: Option<String>,
+    settings: State<'_, SettingsState>,
+) -> Result<(), String> {
+    settings
+        .update(|state| {
+            state.default_destination = id.clone().filter(|v| !v.is_empty());
+            Ok(())
+        })
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn default_destination(settings: State<'_, SettingsState>) -> Option<String> {
+    settings.snapshot().default_destination
 }
 
 /// Upload the most recent capture.
@@ -594,13 +607,10 @@ pub async fn upload_last_capture(
         )
     };
 
-    let id = match destination {
-        Some(id) => id,
-        None => app
-            .state::<crate::uploads::DefaultDestination>()
-            .resolve()
-            .map_err(err)?,
-    };
+    let id = crate::uploads::resolve_destination(
+        destination.or_else(|| settings.default_destination.clone()),
+    )
+    .map_err(err)?;
 
     let payload = kestrel_upload::Payload::File {
         bytes: bytes.into_inner(),
@@ -676,13 +686,8 @@ pub async fn upload_text(
     text: String,
     destination: Option<String>,
 ) -> Result<crate::uploads::Uploaded, String> {
-    let id = match destination {
-        Some(id) => id,
-        None => app
-            .state::<crate::uploads::DefaultDestination>()
-            .resolve()
-            .map_err(err)?,
-    };
+    let configured = app.state::<SettingsState>().snapshot().default_destination;
+    let id = crate::uploads::resolve_destination(destination.or(configured)).map_err(err)?;
 
     let uploaded = crate::uploads::upload(&id, kestrel_upload::Payload::Text(text), &UiPrompter)
         .await

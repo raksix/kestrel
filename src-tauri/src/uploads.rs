@@ -6,7 +6,6 @@
 //! dotfiles repo, exactly as they would with ShareX.
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use kestrel_upload::client::{self, Payload};
 use kestrel_upload::sxcu::CustomUploader;
@@ -222,32 +221,23 @@ pub async fn upload(
     })
 }
 
-/// The destination used when a workflow does not name one.
-#[derive(Default)]
-pub struct DefaultDestination(pub Mutex<Option<String>>);
-
-impl DefaultDestination {
-    pub fn get(&self) -> Option<String> {
-        self.0.lock().expect("destination mutex poisoned").clone()
-    }
-
-    pub fn set(&self, id: Option<String>) {
-        *self.0.lock().expect("destination mutex poisoned") = id;
-    }
-
-    /// The configured destination, or the only one that exists.
-    ///
-    /// Falling back to a sole destination means a user who imported exactly one
-    /// uploader never has to also select it.
-    pub fn resolve(&self) -> Result<String> {
-        if let Some(id) = self.get() {
+/// Resolve which destination an upload should go to.
+///
+/// Falling back to a sole destination means someone who imported exactly one
+/// uploader never has to also select it.
+pub fn resolve_destination(configured: Option<String>) -> Result<String> {
+    if let Some(id) = configured.filter(|id| !id.is_empty()) {
+        // A destination that has since been deleted should not silently
+        // redirect the upload somewhere else.
+        if list()?.iter().any(|d| d.id == id) {
             return Ok(id);
         }
-        let available = list()?;
-        match available.as_slice() {
-            [only] => Ok(only.id.clone()),
-            _ => Err(UploadError::NoDestination),
-        }
+        return Err(UploadError::UnknownDestination(id));
+    }
+
+    match list()?.as_slice() {
+        [only] => Ok(only.id.clone()),
+        _ => Err(UploadError::NoDestination),
     }
 }
 
@@ -277,17 +267,33 @@ mod tests {
 
     #[test]
     fn no_destinations_configured_is_a_named_error() {
-        let default = DefaultDestination::default();
-        // With none stored there is nothing to fall back to.
+        // With none stored there is nothing to fall back to, and the error has
+        // to say so rather than surfacing as an empty URL later on.
         if list().map(|l| l.is_empty()).unwrap_or(true) {
-            assert!(matches!(default.resolve(), Err(UploadError::NoDestination)));
+            assert!(matches!(
+                resolve_destination(None),
+                Err(UploadError::NoDestination)
+            ));
         }
     }
 
     #[test]
-    fn an_explicit_default_wins() {
-        let default = DefaultDestination::default();
-        default.set(Some("chosen".into()));
-        assert_eq!(default.resolve().unwrap(), "chosen");
+    fn a_destination_that_no_longer_exists_is_rejected() {
+        // Silently redirecting to some other uploader would send the user's
+        // screenshot somewhere they did not choose.
+        assert!(matches!(
+            resolve_destination(Some("deleted-uploader".into())),
+            Err(UploadError::UnknownDestination(_))
+        ));
+    }
+
+    #[test]
+    fn an_empty_configured_id_is_treated_as_unset() {
+        if list().map(|l| l.is_empty()).unwrap_or(true) {
+            assert!(matches!(
+                resolve_destination(Some(String::new())),
+                Err(UploadError::NoDestination)
+            ));
+        }
     }
 }
