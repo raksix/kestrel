@@ -118,6 +118,7 @@
 }
 
 .editor__canvas-wrap {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -150,4 +151,21 @@
   /* Without this a Retina capture is resampled blurrily while zoomed out. */
   image-rendering: auto;
   touch-action: none;
+}
+
+/* The inline text box sits over the canvas, styled to look like the text it
+   will become so that what is typed matches what is drawn. */
+.editor__text-input {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed var(--accent);
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.25);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  line-height: 1.25;
+  resize: none;
+  outline: none;
+  overflow: hidden;
 }

@@ -105,8 +105,8 @@ Tümü faz 2. Kısayollar ShareX modern editörüyle birebir.
 | `B` | Bulanıklaştır | `[x]` | örnekleme alana sınırlı |
 | `P` | Pikselleştir | `[x]` | |
 | `S` | Spot ışığı | `[x]` | |
-| `T` | Metin | `[ ]` | font altyapısı bekliyor |
-| `O` | Konuşma balonu | `[ ]` | font altyapısı bekliyor |
+| `T` | Metin | `[x]` | sistem fontu, kontur, çok satır |
+| `O` | Konuşma balonu | `[~]` | render hazır, araç bağlanacak |
 | `I` | Görsel ekle | `[ ]` | |
 | `J` | Emoji | `[ ]` | |
 | `K` | İmleç | `[ ]` | |
@@ -499,7 +499,7 @@ Tümü faz 6.
 |---|:-:|:-:|:-:|:-:|
 | Yakalama yöntemleri | 14 | 6 | 0 | 8 |
 | Overlay | 31 | 11 | 1 | 19 |
-| Editör | 33 | 13 | 1 | 19 |
+| Editör | 33 | 14 | 2 | 17 |
 | Efektler | ~40 | 0 | 0 | ~40 |
 | After-capture / after-upload | 28 | 3 | 0 | 25 |
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |

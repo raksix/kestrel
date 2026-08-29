@@ -15,3 +15,5 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 image.workspace = true
+ab_glyph = "0.2"
+fontdb = { version = "0.24", default-features = false, features = ["fs", "std"] }

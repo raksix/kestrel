@@ -7,6 +7,7 @@
 //! and the export must not be limited to what fits on screen.
 
 pub mod document;
+pub mod font;
 pub mod render;
 pub mod shape;
 

@@ -9,6 +9,7 @@
 use image::{Rgba, RgbaImage};
 
 use crate::document::Document;
+use crate::font;
 use crate::shape::{ArrowHead, Color, Point, Rect, Shape, Stroke};
 
 /// Draw every annotation onto a copy of `base`, in painting order.
@@ -64,14 +65,146 @@ fn draw_shape(canvas: &mut RgbaImage, shape: &Shape) {
         Shape::Step {
             center,
             radius,
+            number,
             fill,
-            ..
-        } => fill_circle(canvas, *center, *radius, *fill),
-        // Text rendering needs a font, which is landing with the text tool
-        // itself. Drawing a placeholder box would be worse than drawing
-        // nothing: it would end up in an exported file.
-        Shape::Text { .. } | Shape::SpeechBalloon { .. } => {}
+            text_color,
+        } => {
+            fill_circle(canvas, *center, *radius, *fill);
+            let label = number.to_string();
+            // The digits should fill the badge without touching its edge.
+            draw_centered_text(canvas, &label, *center, radius * 1.15, *text_color);
+        }
+        Shape::Text {
+            rect,
+            content,
+            color,
+            outline,
+            size,
+            bold,
+            italic,
+        } => draw_text(
+            canvas,
+            content,
+            (rect.x, rect.y),
+            *size,
+            *bold,
+            *italic,
+            *color,
+            *outline,
+        ),
+        Shape::SpeechBalloon {
+            rect,
+            tail,
+            content,
+            stroke,
+            fill,
+            text_color,
+            size,
+        } => {
+            // The tail is drawn first so the bubble's fill covers where the two
+            // meet, leaving no seam.
+            draw_balloon_tail(canvas, *rect, *tail, *fill);
+            let radius = (rect.height * 0.25).min(18.0);
+            fill_rounded_rect(canvas, *rect, radius, *fill);
+            stroke_rounded_rect(canvas, *rect, radius, *stroke);
+            draw_centered_text(canvas, content, rect.center(), *size, *text_color);
+        }
     }
+}
+
+// ── Text ────────────────────────────────────────────────────────────────
+
+/// Draw `text` with its top-left corner at `origin`.
+///
+/// An outline colour is applied by stamping the glyphs around the fill in eight
+/// directions. That is cheap and, at annotation sizes, indistinguishable from a
+/// real stroked outline — and it is what makes light text stay legible over an
+/// arbitrary screenshot.
+#[allow(clippy::too_many_arguments)]
+fn draw_text(
+    canvas: &mut RgbaImage,
+    text: &str,
+    origin: (f32, f32),
+    size: f32,
+    bold: bool,
+    italic: bool,
+    color: Color,
+    outline: Color,
+) {
+    if text.is_empty() || size <= 0.0 {
+        return;
+    }
+    let Some(fonts) = font::system() else {
+        tracing::warn!("no system font is available; text will not be rendered");
+        return;
+    };
+
+    if !outline.is_transparent() {
+        const OFFSETS: [(f32, f32); 8] = [
+            (-1.0, -1.0),
+            (0.0, -1.0),
+            (1.0, -1.0),
+            (-1.0, 0.0),
+            (1.0, 0.0),
+            (-1.0, 1.0),
+            (0.0, 1.0),
+            (1.0, 1.0),
+        ];
+        let spread = (size / 16.0).clamp(1.0, 3.0);
+        for (dx, dy) in OFFSETS {
+            fonts.rasterize(
+                text,
+                size,
+                bold,
+                italic,
+                (origin.0 + dx * spread, origin.1 + dy * spread),
+                |x, y, coverage| blend(canvas, x as i64, y as i64, outline, coverage),
+            );
+        }
+    }
+
+    fonts.rasterize(text, size, bold, italic, origin, |x, y, coverage| {
+        blend(canvas, x as i64, y as i64, color, coverage)
+    });
+}
+
+/// Draw `text` centred on `center`, with no outline.
+fn draw_centered_text(canvas: &mut RgbaImage, text: &str, center: Point, size: f32, color: Color) {
+    if text.is_empty() || size <= 0.0 {
+        return;
+    }
+    let Some(fonts) = font::system() else { return };
+
+    let (width, height) = fonts.measure(text, size, true, false);
+    let origin = (center.x - width / 2.0, center.y - height / 2.0);
+
+    fonts.rasterize(text, size, true, false, origin, |x, y, coverage| {
+        blend(canvas, x as i64, y as i64, color, coverage)
+    });
+}
+
+/// The pointer from a speech balloon towards whatever it is labelling.
+fn draw_balloon_tail(canvas: &mut RgbaImage, rect: Rect, tail: Point, fill: Color) {
+    let center = rect.center();
+    let dx = tail.x - center.x;
+    let dy = tail.y - center.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= f32::EPSILON {
+        return;
+    }
+
+    // Base the tail on the bubble edge, perpendicular to the direction it points.
+    let (ux, uy) = (dx / len, dy / len);
+    let half = (rect.width.min(rect.height) * 0.18).max(6.0);
+    let base = Point::new(center.x + ux * (len * 0.2), center.y + uy * (len * 0.2));
+
+    fill_triangle(
+        canvas,
+        tail,
+        Point::new(base.x - uy * half, base.y + ux * half),
+        Point::new(base.x + uy * half, base.y - ux * half),
+        fill,
+    );
 }
 
 // ── Pixel plumbing ──────────────────────────────────────────────────────
@@ -704,22 +837,101 @@ mod tests {
         );
     }
 
+    fn painted_pixels(image: &RgbaImage, reference: &RgbaImage) -> usize {
+        image
+            .pixels()
+            .zip(reference.pixels())
+            .filter(|(a, b)| a != b)
+            .count()
+    }
+
     #[test]
-    fn text_shapes_render_nothing_rather_than_a_placeholder() {
-        // Until the font pipeline lands, a text shape must be a no-op: a
-        // placeholder box would end up baked into an exported file.
-        let base = canvas(40, 40);
+    fn text_marks_the_image() {
+        let base = canvas(200, 60);
         let mut document = Document::new();
         document.push(Shape::Text {
-            rect: Rect::new(5.0, 5.0, 30.0, 10.0),
+            rect: Rect::new(10.0, 10.0, 180.0, 30.0),
             content: "merhaba".into(),
             color: Color::BLACK,
+            outline: Color::TRANSPARENT,
+            size: 24.0,
+            bold: false,
+            italic: false,
+        });
+
+        let out = render(&base, &document);
+        assert!(painted_pixels(&out, &base) > 20, "text should be visible");
+    }
+
+    #[test]
+    fn empty_text_draws_nothing() {
+        let base = canvas(80, 40);
+        let mut document = Document::new();
+        document.push(Shape::Text {
+            rect: Rect::new(5.0, 5.0, 70.0, 20.0),
+            content: String::new(),
+            color: Color::BLACK,
             outline: Color::WHITE,
-            size: 14.0,
+            size: 16.0,
             bold: false,
             italic: false,
         });
 
         assert_eq!(render(&base, &document), base);
+    }
+
+    #[test]
+    fn an_outline_makes_text_cover_more_pixels() {
+        let base = canvas(220, 70);
+
+        let mut plain = Document::new();
+        plain.push(Shape::Text {
+            rect: Rect::new(10.0, 10.0, 200.0, 40.0),
+            content: "merhaba".into(),
+            color: Color::WHITE,
+            outline: Color::TRANSPARENT,
+            size: 28.0,
+            bold: false,
+            italic: false,
+        });
+
+        let mut outlined = Document::new();
+        outlined.push(Shape::Text {
+            rect: Rect::new(10.0, 10.0, 200.0, 40.0),
+            content: "merhaba".into(),
+            color: Color::WHITE,
+            outline: Color::BLACK,
+            size: 28.0,
+            bold: false,
+            italic: false,
+        });
+
+        // White text on white is invisible without an outline, which is exactly
+        // why the outline exists.
+        let without = painted_pixels(&render(&base, &plain), &base);
+        let with = painted_pixels(&render(&base, &outlined), &base);
+        assert!(with > without, "the outline must add coverage");
+    }
+
+    #[test]
+    fn a_step_badge_draws_its_number_inside_the_circle() {
+        let base = canvas(80, 80);
+        let mut document = Document::new();
+        document.push(Shape::Step {
+            center: Point::new(40.0, 40.0),
+            radius: 20.0,
+            number: 7,
+            fill: Color::rgb(255, 0, 0),
+            text_color: Color::WHITE,
+        });
+
+        let out = render(&base, &document);
+
+        // The badge is red, so any white pixel inside it is the numeral.
+        let white_inside = (25..55)
+            .flat_map(|y| (25..55).map(move |x| (x, y)))
+            .filter(|(x, y)| out.get_pixel(*x, *y) == &Rgba([255, 255, 255, 255]))
+            .count();
+        assert!(white_inside > 0, "the number should be drawn on the badge");
     }
 }

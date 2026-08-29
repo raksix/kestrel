@@ -6,7 +6,14 @@
  * every platform and is not capped at screen resolution. The two renderers
  * are kept visually close, but where they differ the Rust one is correct.
  */
-import { toCss, type Rect, type Shape, type Stroke } from "../../lib/editorTypes";
+import {
+  toCss,
+  type Color,
+  type Point,
+  type Rect,
+  type Shape,
+  type Stroke,
+} from "../../lib/editorTypes";
 
 /** Draw the base image and every annotation, in painting order. */
 export function drawDocument(
@@ -123,15 +130,128 @@ function drawShape(
       ctx.fillText(String(shape.number), shape.center.x, shape.center.y + shape.radius * 0.05);
       break;
     }
-    case "text":
-    case "speech_balloon":
-      // Rust renders nothing for these until the font pipeline lands. Drawing
-      // them here would show the user something the exported file will not
-      // contain, which is worse than showing nothing.
+    case "text": {
+      drawText(
+        ctx,
+        shape.content,
+        shape.rect.x,
+        shape.rect.y,
+        shape.size,
+        shape.bold,
+        shape.italic,
+        shape.color,
+        shape.outline,
+      );
       break;
+    }
+    case "speech_balloon": {
+      // Tail first, so the bubble fill covers the join and leaves no seam.
+      drawBalloonTail(ctx, shape.rect, shape.tail, shape.fill);
+      const radius = Math.min(shape.rect.height * 0.25, 18);
+      path(ctx, () => roundedRect(ctx, shape.rect, radius));
+      ctx.fillStyle = toCss(shape.fill);
+      ctx.fill();
+      strokePath(ctx, shape.stroke);
+
+      ctx.fillStyle = toCss(shape.text_color);
+      ctx.font = `600 ${shape.size}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(
+        shape.content,
+        shape.rect.x + shape.rect.width / 2,
+        shape.rect.y + shape.rect.height / 2,
+      );
+      break;
+    }
   }
 
   ctx.restore();
+}
+
+/**
+ * Draw text from its top-left corner, with an optional outline.
+ *
+ * The outline is stamped in eight directions around the fill — the same
+ * approach the Rust renderer takes, so the preview and the export agree. It is
+ * what keeps light text legible over an arbitrary screenshot.
+ */
+function drawText(
+  ctx: CanvasRenderingContext2D,
+  content: string,
+  x: number,
+  y: number,
+  size: number,
+  bold: boolean,
+  italic: boolean,
+  color: Color,
+  outline: Color,
+): void {
+  if (!content) return;
+
+  const weight = bold ? "700" : "400";
+  const slant = italic ? "italic " : "";
+  ctx.font = `${slant}${weight} ${size}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+
+  const lines = content.split("\n");
+  const lineHeight = size * 1.25;
+
+  if (outline.a > 0) {
+    const spread = Math.min(Math.max(size / 16, 1), 3);
+    ctx.fillStyle = toCss(outline);
+    for (const [dx, dy] of OUTLINE_OFFSETS) {
+      lines.forEach((line, index) => {
+        ctx.fillText(line, x + dx * spread, y + dy * spread + lineHeight * index);
+      });
+    }
+  }
+
+  ctx.fillStyle = toCss(color);
+  lines.forEach((line, index) => {
+    ctx.fillText(line, x, y + lineHeight * index);
+  });
+}
+
+const OUTLINE_OFFSETS: [number, number][] = [
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [-1, 0],
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+];
+
+/** The pointer from a balloon towards whatever it is labelling. */
+function drawBalloonTail(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  tail: Point,
+  fill: Color,
+): void {
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const dx = tail.x - cx;
+  const dy = tail.y - cy;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.001) return;
+
+  const ux = dx / len;
+  const uy = dy / len;
+  const half = Math.max(Math.min(rect.width, rect.height) * 0.18, 6);
+  const baseX = cx + ux * (len * 0.2);
+  const baseY = cy + uy * (len * 0.2);
+
+  ctx.beginPath();
+  ctx.moveTo(tail.x, tail.y);
+  ctx.lineTo(baseX - uy * half, baseY + ux * half);
+  ctx.lineTo(baseX + uy * half, baseY - ux * half);
+  ctx.closePath();
+  ctx.fillStyle = toCss(fill);
+  ctx.fill();
 }
 
 function path(ctx: CanvasRenderingContext2D, build: () => void): void {

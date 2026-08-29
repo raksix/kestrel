@@ -31,6 +31,7 @@ const TOOLS = [
   { id: "line", key: "l", label: "Çizgi" },
   { id: "arrow", key: "a", label: "Ok" },
   { id: "freehand", key: "f", label: "Serbest" },
+  { id: "text", key: "t", label: "Metin" },
   { id: "step", key: "n", label: "Adım" },
   { id: "highlight", key: "h", label: "Vurgu" },
   { id: "blur", key: "b", label: "Bulanık" },
@@ -68,8 +69,11 @@ export default function Editor() {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Index of the text shape currently being typed into, if any. */
+  const [editing, setEditing] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textInputRef = useRef<HTMLTextAreaElement>(null);
   const undoStack = useRef<Shape[][]>([]);
   const redoStack = useRef<Shape[][]>([]);
 
@@ -228,13 +232,43 @@ export default function Editor() {
 
     const shape = buildShape(drag, color, strokeWidth, nextStepNumber(shapes));
     setDrag(null);
-    if (shape) commit([...shapes, shape]);
+    if (!shape) return;
+
+    commit([...shapes, shape]);
+    if (shape.kind === "text") {
+      // Nothing has been typed yet; open the inline editor straight away
+      // rather than leaving an invisible empty box on the canvas.
+      setEditing(shapes.length);
+    }
   };
+
+  /** Finish typing: keep the text, or drop the shape if nothing was entered. */
+  const commitText = useCallback(
+    (value: string) => {
+      if (editing === null) return;
+      const index = editing;
+      setEditing(null);
+
+      setShapes((current) => {
+        const shape = current[index];
+        if (!shape || shape.kind !== "text") return current;
+        if (value.trim() === "") {
+          return renumberSteps(current.filter((_, i) => i !== index));
+        }
+        return current.map((s, i) =>
+          i === index && s.kind === "text" ? { ...s, content: value } : s,
+        );
+      });
+    },
+    [editing],
+  );
 
   // ── Keyboard ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // While a text box has focus every key belongs to it.
+      if (editing !== null) return;
       const mod = event.metaKey || event.ctrlKey;
 
       if (mod && event.key.toLowerCase() === "z") {
@@ -270,7 +304,11 @@ export default function Editor() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [undo, redo, commit, shapes, selected]);
+  }, [undo, redo, commit, shapes, selected, editing]);
+
+  useEffect(() => {
+    if (editing !== null) textInputRef.current?.focus();
+  }, [editing]);
 
   // ── Export ────────────────────────────────────────────────────────────
 
@@ -374,7 +412,7 @@ export default function Editor() {
             </button>
           ))}
           <p className="editor__note">
-            Metin ve konuşma balonu, font altyapısı gelene kadar devre dışı.
+            Metin: sürükle, yaz, Enter ile bitir. Shift+Enter satır ekler.
           </p>
         </nav>
 
@@ -391,9 +429,76 @@ export default function Editor() {
               onPointerCancel={onPointerUp}
             />
           )}
+          {editing !== null && session && (
+            <TextBox
+              inputRef={textInputRef}
+              shape={shapes[editing]}
+              canvas={canvasRef.current}
+              imageWidth={session.width}
+              onCommit={commitText}
+            />
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The inline text box, positioned over the shape it edits.
+ *
+ * Typing happens in a real textarea rather than on the canvas so that input
+ * methods, selection, autocorrect and accessibility all keep working — none of
+ * which a hand-rolled canvas caret would give us.
+ */
+function TextBox({
+  inputRef,
+  shape,
+  canvas,
+  imageWidth,
+  onCommit,
+}: {
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  shape: Shape | undefined;
+  canvas: HTMLCanvasElement | null;
+  imageWidth: number;
+  onCommit: (value: string) => void;
+}) {
+  const [value, setValue] = useState(shape?.kind === "text" ? shape.content : "");
+
+  if (!shape || shape.kind !== "text" || !canvas) return null;
+
+  // The canvas is displayed scaled to fit, so the box has to scale with it.
+  const scale = canvas.clientWidth / imageWidth;
+
+  return (
+    <textarea
+      ref={inputRef}
+      className="editor__text-input"
+      value={value}
+      spellCheck={false}
+      style={{
+        left: canvas.offsetLeft + shape.rect.x * scale,
+        top: canvas.offsetTop + shape.rect.y * scale,
+        width: Math.max(shape.rect.width * scale, 80),
+        height: Math.max(shape.rect.height * scale, shape.size * scale * 1.4),
+        fontSize: shape.size * scale,
+        color: `rgb(${shape.color.r}, ${shape.color.g}, ${shape.color.b})`,
+      }}
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(event) => {
+        // Enter commits; Shift+Enter adds a line, as in every annotation tool.
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          onCommit(value);
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onCommit("");
+        }
+      }}
+    />
   );
 }
 
@@ -454,6 +559,20 @@ function buildShape(
       return tooSmall ? null : { kind: "pixelate", rect, block: 12 };
     case "spotlight":
       return tooSmall ? null : { kind: "spotlight", rect, dim: 0.55 };
+    case "text":
+      return {
+        kind: "text",
+        // A click with no drag still gets a usable box.
+        rect: tooSmall
+          ? { x: drag.origin.x, y: drag.origin.y, width: 180, height: width * 6 }
+          : rect,
+        content: "",
+        color,
+        outline: { r: 0, g: 0, b: 0, a: 200 },
+        size: Math.max(width * 5, 16),
+        bold: false,
+        italic: false,
+      };
     case "step":
       return buildStep(drag.current, color, stepNumber);
     case "select":
