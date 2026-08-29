@@ -4,6 +4,8 @@ import {
   analyzeLastCapture,
   compareHash,
   compareImages,
+  convertVideo,
+  defaultConvertSettings,
   generateQrCode,
   hashFile,
   ocrInstall,
@@ -12,9 +14,12 @@ import {
   parseColor,
   pickColor,
   scanQrCode,
+  videoThumbnail,
   type Analysis,
   type DecodedQr,
   type FileHash,
+  type ConvertSettings,
+  type ConvertTarget,
   type ImageComparison,
   type OcrModelStatus,
   type Recognised,
@@ -28,6 +33,7 @@ export default function Tools() {
       <QrTool />
       <ColorTool />
       <CompareTool />
+      <VideoTool />
       <OcrTool />
       <HashTool />
       <AnalyzeTool />
@@ -639,6 +645,189 @@ function CompareTool() {
 
       {error && (
         <p className="status status--error" role="alert">
+          <span className="dot" aria-hidden="true" />
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+
+const CONVERT_TARGETS: [ConvertTarget, string][] = [
+  ["mp4", "MP4 (H.264)"],
+  ["webm", "WebM (VP9)"],
+  ["mkv", "MKV (H.264)"],
+  ["gif", "GIF"],
+  ["mp3", "MP3 (yalnız ses)"],
+];
+
+/** ShareX's video converter and thumbnailer, both ffmpeg. */
+function VideoTool() {
+  const [path, setPath] = useState<string | null>(null);
+  const [settings, setSettings] = useState<ConvertSettings>(defaultConvertSettings());
+  const [at, setAt] = useState(1);
+  const [result, setResult] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = async () => {
+    const chosen = await open({
+      filters: [{ name: "Video", extensions: ["mp4", "mkv", "webm", "mov", "avi", "gif"] }],
+    });
+    if (chosen && !Array.isArray(chosen)) {
+      setPath(chosen);
+      setResult(null);
+    }
+  };
+
+  const run = async (task: () => Promise<string>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setResult(await task());
+    } catch (e) {
+      setError(String(e));
+      setResult(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // A GIF has no audio and no CRF, and MP3 has no picture at all, so the
+  // controls that do not apply are hidden rather than left there doing nothing.
+  const isVideo = settings.target !== "mp3";
+  const hasQuality = isVideo && settings.target !== "gif";
+
+  return (
+    <section className="card">
+      <h2 className="card__title">Video dönüştür</h2>
+      <p className="card__hint">
+        Biçim değiştir, küçült, sesi ayır ya da tek kare al. Sonuç kaynağın
+        yanına yazılır; kaynak dosyaya dokunulmaz.
+      </p>
+
+      <button type="button" className="button" onClick={choose}>
+        {path ? path.split(/[\\/]/).pop() : "Video seç…"}
+      </button>
+
+      <div className="tools__row">
+        <label className="tools__row">
+          <span className="tools__label">Biçim</span>
+          <select
+            className="input"
+            value={settings.target}
+            onChange={(e) =>
+              setSettings({ ...settings, target: e.target.value as ConvertTarget })
+            }
+          >
+            {CONVERT_TARGETS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {hasQuality && (
+          <label className="tools__row">
+            <span className="tools__label">Kalite (CRF)</span>
+            <input
+              type="range"
+              min={0}
+              max={51}
+              value={settings.crf}
+              onChange={(e) => setSettings({ ...settings, crf: Number(e.target.value) })}
+            />
+            <span className="muted">{settings.crf}</span>
+          </label>
+        )}
+      </div>
+
+      {isVideo && (
+        <div className="tools__row">
+          <label className="tools__row">
+            <span className="tools__label">Genişlik</span>
+            <input
+              type="number"
+              className="input"
+              min={0}
+              placeholder="özgün"
+              value={settings.width ?? ""}
+              onChange={(e) =>
+                setSettings({ ...settings, width: e.target.value ? Number(e.target.value) : null })
+              }
+            />
+          </label>
+          <label className="tools__row">
+            <span className="tools__label">FPS</span>
+            <input
+              type="number"
+              className="input"
+              min={0}
+              placeholder="özgün"
+              value={settings.fps ?? ""}
+              onChange={(e) =>
+                setSettings({ ...settings, fps: e.target.value ? Number(e.target.value) : null })
+              }
+            />
+          </label>
+          {settings.target !== "gif" && (
+            <label className="tools__row">
+              <input
+                type="checkbox"
+                checked={settings.mute}
+                onChange={(e) => setSettings({ ...settings, mute: e.target.checked })}
+              />
+              <span className="tools__label">Sesi at</span>
+            </label>
+          )}
+        </div>
+      )}
+      <p className="card__hint">
+        Genişlik ve FPS boş bırakılırsa kaynağınki korunur. Yükseklik oranı
+        korumak için otomatik hesaplanır.
+      </p>
+
+      <div className="tools__row">
+        <button
+          type="button"
+          className="button button--primary"
+          disabled={!path || busy}
+          onClick={() => path && run(() => convertVideo(path, settings))}
+        >
+          {busy ? "Çalışıyor…" : "Dönüştür"}
+        </button>
+
+        <label className="tools__row">
+          <span className="tools__label">Kare saniyesi</span>
+          <input
+            type="number"
+            className="input"
+            min={0}
+            step={0.5}
+            value={at}
+            onChange={(e) => setAt(Math.max(0, Number(e.target.value)))}
+          />
+        </label>
+        <button
+          type="button"
+          className="button"
+          disabled={!path || busy}
+          onClick={() => path && run(() => videoThumbnail(path, at))}
+        >
+          Kare al
+        </button>
+      </div>
+
+      {result && (
+        <p className="card__hint">
+          Yazıldı: <code className="tools__path">{result}</code>
+        </p>
+      )}
+
+      {error && (
+        <p className="status status--error" role="alert" style={{ whiteSpace: "pre-line" }}>
           <span className="dot" aria-hidden="true" />
           {error}
         </p>

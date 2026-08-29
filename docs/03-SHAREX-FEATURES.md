@@ -393,8 +393,8 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | 10 | Görsel karşılaştırıcı | `[x]` | 5 | Yüzde + sınır dikdörtgeni + fark görseli; yan yana/geçiş kaldı |
 | 11 | Görsel birleştirici | `[ ]` | 5 | Dikey / yatay / ızgara |
 | 12 | Görsel bölücü | `[ ]` | 5 | Izgaraya böl |
-| 13 | Küçük resim üretici | `[ ]` | 5 | Toplu |
-| 14 | Video dönüştürücü | `[ ]` | 4 | ffmpeg ön ayarları |
+| 13 | Küçük resim üretici | `[x]` | 5 | Tek kare; toplu üretim kaldı |
+| 14 | Video dönüştürücü | `[x]` | 4 | MP4/WebM/MKV/GIF/MP3, ölçek, FPS, ses ayırma |
 | 15 | Video küçük resmi | `[ ]` | 4 | Zaman damgalı ızgara |
 | 16 | Görsel analizi | `[x]` | 5 | Boyut, format, histogram, baskın renkler, EXIF |
 | 17 | OCR | `[x]` | 5 | `ocrs`, modeller ilk kullanımda indirilir |
@@ -547,7 +547,7 @@ Tümü faz 6.
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
-| Araçlar | 25 | 11 | 0 | 14 |
+| Araçlar | 25 | 13 | 0 | 12 |
 | Workflow / otomasyon | 25 | 7 | 1 | 17 |
 | Geçmiş | 10 | 5 | 2 | 3 |
 | Ayarlar | 10 | 1 | 2 | 7 |

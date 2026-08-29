@@ -1161,3 +1161,41 @@ pub fn compare_images(
 
     Ok(ImageComparison { summary, preview })
 }
+
+// ── Video tools ─────────────────────────────────────────────────────────
+
+fn ffmpeg_binary() -> Result<std::path::PathBuf, String> {
+    kestrel_record::ffmpeg::find()
+        .ok_or_else(|| kestrel_record::ffmpeg::FfmpegError::NotFound.to_string())
+}
+
+/// Convert a video, writing the result beside the source.
+///
+/// The source is never the destination: ffmpeg runs with `-y`, so reading and
+/// writing the same path would leave the user with a truncated original.
+#[tauri::command]
+pub fn convert_video(
+    path: String,
+    settings: kestrel_record::ConvertSettings,
+) -> Result<String, String> {
+    let output = kestrel_record::convert(&ffmpeg_binary()?, std::path::Path::new(&path), &settings)
+        .map_err(err)?;
+    Ok(output.to_string_lossy().into_owned())
+}
+
+/// Grab a single frame from a video as a PNG.
+#[tauri::command]
+pub fn video_thumbnail(
+    path: String,
+    at_seconds: f32,
+    width: Option<u32>,
+) -> Result<String, String> {
+    let output = kestrel_record::thumbnail(
+        &ffmpeg_binary()?,
+        std::path::Path::new(&path),
+        at_seconds,
+        width.unwrap_or(480),
+    )
+    .map_err(err)?;
+    Ok(output.to_string_lossy().into_owned())
+}

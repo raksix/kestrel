@@ -57,6 +57,9 @@ that language exactly, so those files work unmodified.
 - Screen recording to H.264, HEVC, VP9 or AV1, and animated GIF with a
   per-clip palette
 - Pause, resume and cancel, with a live duration that excludes paused time
+- Convert a video to MP4, WebM, MKV, GIF or MP3, with optional rescaling and
+  frame-rate change — the result is written beside the source, never over it
+- Pull a single frame out of a video as a thumbnail
 - Needs ffmpeg; if it is missing the app says so and gives the install command
   for the platform
 
@@ -104,8 +107,8 @@ not capped at screen resolution.
 | 1 | Capture backends, region overlay, shortcuts | ✅ |
 | 2 | Annotation editor, framing, pin to screen, post-capture card | ✅ |
 | 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
-| 4 | Screen recording, GIF, video tools | 🚧 audio and video tools left |
-| 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, nine tools done |
+| 4 | Screen recording, GIF, video tools | 🚧 audio capture left |
+| 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, eleven tools done |
 | 6 | CLI, integrations, scrolling capture, 1.0 | ⏳ |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·

@@ -266,6 +266,35 @@ export interface FfmpegStatus {
 }
 
 export const ffmpegStatus = () => invoke<FfmpegStatus>("ffmpeg_status");
+
+// ── Video tools ─────────────────────────────────────────────────────────
+
+export type ConvertTarget = "mp4" | "webm" | "mkv" | "gif" | "mp3";
+
+export interface ConvertSettings {
+  target: ConvertTarget;
+  crf: number;
+  /** Null keeps the source frame rate. */
+  fps: number | null;
+  /** Null keeps the source size; height follows to preserve the aspect ratio. */
+  width: number | null;
+  mute: boolean;
+}
+
+export const defaultConvertSettings = (): ConvertSettings => ({
+  target: "mp4",
+  crf: 23,
+  fps: null,
+  width: null,
+  mute: false,
+});
+
+/** Returns the path written, which is never the source. */
+export const convertVideo = (path: string, settings: ConvertSettings) =>
+  invoke<string>("convert_video", { path, settings });
+
+export const videoThumbnail = (path: string, atSeconds: number, width?: number) =>
+  invoke<string>("video_thumbnail", { path, atSeconds, width });
 export const recordingStatus = () => invoke<RecordingStatus>("recording_status");
 export const startRecording = (gif = false) =>
   invoke<RecordingStatus>("start_recording", { gif });

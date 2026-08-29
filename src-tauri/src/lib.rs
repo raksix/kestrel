@@ -127,6 +127,8 @@ pub fn run() {
             commands::pick_color,
             commands::parse_color,
             commands::compare_images,
+            commands::convert_video,
+            commands::video_thumbnail,
             commands::read_metadata,
             commands::strip_metadata,
             commands::index_directory,

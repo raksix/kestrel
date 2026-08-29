@@ -7,8 +7,10 @@
 //! would have to be rebuilt rather than reused. ShareX bundles ffmpeg for the
 //! same reasons.
 
+pub mod convert;
 pub mod ffmpeg;
 pub mod recorder;
 
+pub use convert::{convert, thumbnail, ConvertSettings, Target};
 pub use ffmpeg::{OutputFormat, RecordSettings, VideoCodec};
 pub use recorder::{start, Recording};

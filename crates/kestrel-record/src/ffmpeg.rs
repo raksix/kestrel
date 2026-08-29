@@ -23,7 +23,7 @@ pub enum VideoCodec {
 }
 
 impl VideoCodec {
-    fn encoder(self) -> &'static str {
+    pub(crate) fn encoder(self) -> &'static str {
         match self {
             VideoCodec::H264 => "libx264",
             VideoCodec::Hevc => "libx265",

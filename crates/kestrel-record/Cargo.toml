@@ -15,3 +15,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 xcap.workspace = true
+
+[dev-dependencies]
+# The conversion tests read back a thumbnail to check its size.
+image.workspace = true
