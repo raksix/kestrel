@@ -112,7 +112,7 @@ Tümü faz 2. Kısayollar ShareX modern editörüyle birebir.
 | `K` | İmleç | `[ ]` | |
 | `W` | Akıllı silgi | `[ ]` | |
 | `M` | Büyüteç | `[ ]` | |
-| `C` | Kırp | `[ ]` | |
+| `C` | Kırp | `[x]` | sürükle, kaldırılabilir |
 | `U` | Kes (cut out) | `[ ]` | |
 
 ### 3.2 Editör eylemleri
@@ -133,11 +133,21 @@ Tümü faz 2. Kısayollar ShareX modern editörüyle birebir.
 | Home/End/PageUp/PageDown | Z-sırası | `[ ]` |
 
 ### 3.3 Arka plan ve güzelleştirme (Image Beautifier)
-Kenar boşluğu · iç boşluk · akıllı padding · yuvarlatılmış köşe · gölge ·
-en-boy oranı · arka plan (şeffaf / düz renk / gradyan / görsel / duvar kâğıdı)
-— tümü `[ ]` faz 2.
 
-**Kestrel eki:** 3B perspektif eğimi.
+| Özellik | Durum | Not |
+|---|:-:|---|
+| Kenar boşluğu (padding) | `[x]` | |
+| Yuvarlatılmış köşe | `[x]` | alfa kanalından kesiliyor |
+| Gölge | `[x]` | içeriğin siluetini takip eder, kutusunu değil |
+| Arka plan: şeffaf | `[x]` | |
+| Arka plan: düz renk | `[x]` | |
+| Arka plan: gradyan | `[x]` | açı ayarlanabilir |
+| Arka plan: görsel | `[ ]` | |
+| Arka plan: duvar kâğıdı | `[ ]` | |
+| Akıllı padding | `[ ]` | |
+| En-boy oranı ayarı | `[ ]` | |
+
+**Kestrel eki:** 3B perspektif eğimi — `[ ]`.
 
 ### 3.4 Editör seçenekleri
 Tema · sistem vurgu rengini takip · pencere durumunu hatırla · çıkış onayı ·
@@ -176,7 +186,7 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 |---|---|:-:|:-:|
 | 1 | Hızlı görev menüsünü göster | `[ ]` | 3 |
 | 2 | "Yakalama sonrası" penceresini göster | `[ ]` | 3 |
-| 3 | Görseli güzelleştir | `[ ]` | 2 |
+| 3 | Görseli güzelleştir | `[x]` | 2 |
 | 4 | Görsel efektleri uygula | `[ ]` | 5 |
 | 5 | Editörde aç | `[x]` | 2 |
 | 6 | Panoya kopyala | `[x]` | 1 |
@@ -499,9 +509,9 @@ Tümü faz 6.
 |---|:-:|:-:|:-:|:-:|
 | Yakalama yöntemleri | 14 | 6 | 0 | 8 |
 | Overlay | 31 | 11 | 1 | 19 |
-| Editör | 33 | 14 | 2 | 17 |
+| Editör | 33 | 21 | 2 | 10 |
 | Efektler | ~40 | 0 | 0 | ~40 |
-| After-capture / after-upload | 28 | 3 | 0 | 25 |
+| After-capture / after-upload | 28 | 4 | 0 | 24 |
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |

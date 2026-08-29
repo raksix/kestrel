@@ -8,10 +8,12 @@
 
 pub mod document;
 pub mod font;
+pub mod frame;
 pub mod render;
 pub mod shape;
 
 pub use document::Document;
+pub use frame::{Background, Frame, Shadow};
 pub use render::render;
 pub use shape::{ArrowHead, Color, Point, Rect, Shape, Stroke};
 

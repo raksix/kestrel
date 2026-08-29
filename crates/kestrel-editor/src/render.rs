@@ -12,13 +12,17 @@ use crate::document::Document;
 use crate::font;
 use crate::shape::{ArrowHead, Color, Point, Rect, Shape, Stroke};
 
-/// Draw every annotation onto a copy of `base`, in painting order.
+/// Draw every annotation onto a copy of `base`, then apply the frame.
+///
+/// The order matters: annotations are positioned in the base image's
+/// coordinate space, so cropping or padding has to happen afterwards — else
+/// every shape would need adjusting whenever the frame changed.
 pub fn render(base: &RgbaImage, document: &Document) -> RgbaImage {
     let mut canvas = base.clone();
     for shape in document.shapes() {
         draw_shape(&mut canvas, shape);
     }
-    canvas
+    crate::frame::apply(&canvas, document.frame())
 }
 
 fn draw_shape(canvas: &mut RgbaImage, shape: &Shape) {

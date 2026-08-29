@@ -9,24 +9,134 @@
 import {
   toCss,
   type Color,
+  type Background,
+  type Frame,
   type Point,
   type Rect,
   type Shape,
   type Stroke,
 } from "../../lib/editorTypes";
 
-/** Draw the base image and every annotation, in painting order. */
+/**
+ * Draw the base image, every annotation, and then the frame.
+ *
+ * The frame is applied last for the same reason it is in Rust: annotations live
+ * in the base image's coordinate space, so cropping or padding first would mean
+ * moving every shape whenever the frame changed.
+ */
 export function drawDocument(
   ctx: CanvasRenderingContext2D,
   base: CanvasImageSource,
   width: number,
   height: number,
   shapes: Shape[],
+  frame: Frame,
 ): void {
-  ctx.clearRect(0, 0, width, height);
-  ctx.drawImage(base, 0, 0, width, height);
+  const annotated = document.createElement("canvas");
+  annotated.width = width;
+  annotated.height = height;
+  const annotatedCtx = annotated.getContext("2d");
+  if (!annotatedCtx) return;
+
+  annotatedCtx.drawImage(base, 0, 0, width, height);
   for (const shape of shapes) {
-    drawShape(ctx, shape, width, height);
+    drawShape(annotatedCtx, shape, width, height);
+  }
+
+  applyFrame(ctx, annotated, frame);
+}
+
+/** Crop, round, shadow and background, onto a canvas already sized to fit. */
+function applyFrame(
+  ctx: CanvasRenderingContext2D,
+  annotated: HTMLCanvasElement,
+  frame: Frame,
+): void {
+  const crop = frame.crop ?? {
+    x: 0,
+    y: 0,
+    width: annotated.width,
+    height: annotated.height,
+  };
+  const contentWidth = Math.max(Math.round(Math.min(crop.width, annotated.width - crop.x)), 1);
+  const contentHeight = Math.max(Math.round(Math.min(crop.height, annotated.height - crop.y)), 1);
+
+  const content = document.createElement("canvas");
+  content.width = contentWidth;
+  content.height = contentHeight;
+  const contentCtx = content.getContext("2d");
+  if (!contentCtx) return;
+
+  contentCtx.drawImage(
+    annotated,
+    Math.max(Math.round(crop.x), 0),
+    Math.max(Math.round(crop.y), 0),
+    contentWidth,
+    contentHeight,
+    0,
+    0,
+    contentWidth,
+    contentHeight,
+  );
+
+  if (frame.corner_radius > 0) {
+    // Knock the corners out of the alpha channel, so the shadow below follows
+    // the rounded silhouette rather than a rectangle.
+    const radius = Math.min(frame.corner_radius, contentWidth / 2, contentHeight / 2);
+    contentCtx.globalCompositeOperation = "destination-in";
+    contentCtx.beginPath();
+    contentCtx.roundRect(0, 0, contentWidth, contentHeight, radius);
+    contentCtx.fill();
+    contentCtx.globalCompositeOperation = "source-over";
+  }
+
+  const pad = Math.max(frame.padding, 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  paintBackground(ctx, frame.background);
+
+  if (frame.shadow) {
+    // Canvas shadows follow the drawn alpha, which is exactly what the Rust
+    // renderer does with its blurred silhouette.
+    ctx.save();
+    ctx.shadowColor = toCss(frame.shadow.color);
+    ctx.shadowBlur = frame.shadow.blur;
+    ctx.shadowOffsetX = frame.shadow.offset_x;
+    ctx.shadowOffsetY = frame.shadow.offset_y;
+    ctx.drawImage(content, pad, pad);
+    ctx.restore();
+  }
+
+  ctx.drawImage(content, pad, pad);
+}
+
+function paintBackground(ctx: CanvasRenderingContext2D, background: Background): void {
+  const { width, height } = ctx.canvas;
+  switch (background.kind) {
+    case "transparent":
+      return;
+    case "solid":
+      ctx.fillStyle = toCss(background.color);
+      ctx.fillRect(0, 0, width, height);
+      return;
+    case "gradient": {
+      const radians = (background.angle * Math.PI) / 180;
+      const dx = Math.cos(radians);
+      const dy = Math.sin(radians);
+      const extent = Math.abs(width * dx) + Math.abs(height * dy) || 1;
+      const originX = dx < 0 ? width : 0;
+      const originY = dy < 0 ? height : 0;
+
+      const gradient = ctx.createLinearGradient(
+        originX,
+        originY,
+        originX + dx * extent,
+        originY + dy * extent,
+      );
+      gradient.addColorStop(0, toCss(background.from));
+      gradient.addColorStop(1, toCss(background.to));
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+    }
   }
 }
 

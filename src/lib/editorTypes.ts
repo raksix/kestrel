@@ -74,9 +74,59 @@ export type Shape =
   | { kind: "pixelate"; rect: Rect; block: number }
   | { kind: "spotlight"; rect: Rect; dim: number };
 
+export type Background =
+  | { kind: "transparent" }
+  | { kind: "solid"; color: Color }
+  | { kind: "gradient"; from: Color; to: Color; angle: number };
+
+export interface Shadow {
+  color: Color;
+  blur: number;
+  offset_x: number;
+  offset_y: number;
+}
+
+/**
+ * Crop, padding, corners, shadow and background — ShareX's crop tool and image
+ * beautifier combined, because they all change the size of the output rather
+ * than drawing onto it.
+ */
+export interface Frame {
+  crop: Rect | null;
+  padding: number;
+  corner_radius: number;
+  shadow: Shadow | null;
+  background: Background;
+}
+
+export const emptyFrame = (): Frame => ({
+  crop: null,
+  padding: 0,
+  corner_radius: 0,
+  shadow: null,
+  background: { kind: "transparent" },
+});
+
+export const defaultShadow = (): Shadow => ({
+  color: rgba(0, 0, 0, 110),
+  blur: 24,
+  offset_x: 0,
+  offset_y: 12,
+});
+
 /** The document shape Rust's serde expects. History is not part of the file. */
 export interface EditorDocument {
   shapes: Shape[];
+  frame: Frame;
+}
+
+/** Output size for a frame, mirroring `Frame::output_size`. */
+export function frameOutputSize(frame: Frame, source: [number, number]): [number, number] {
+  const [w, h] = frame.crop
+    ? [Math.max(frame.crop.width, 1), Math.max(frame.crop.height, 1)]
+    : source;
+  const pad = Math.max(frame.padding, 0) * 2;
+  return [Math.round(w + pad), Math.round(h + pad)];
 }
 
 export interface EditorOpened {

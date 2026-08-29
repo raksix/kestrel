@@ -9,6 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::frame::Frame;
 use crate::shape::{Point, Rect, Shape};
 
 /// How many undo steps to keep. Beyond this the oldest are dropped.
@@ -18,10 +19,19 @@ const HISTORY_LIMIT: usize = 200;
 pub struct Document {
     /// Painting order: index 0 is furthest back.
     shapes: Vec<Shape>,
+    /// Crop, padding, corners, shadow and background. Applied after the
+    /// annotations, because it changes the size of the output rather than
+    /// drawing onto it.
+    #[serde(default)]
+    frame: Frame,
     #[serde(skip)]
     undo_stack: Vec<Vec<Shape>>,
     #[serde(skip)]
     redo_stack: Vec<Vec<Shape>>,
+    #[serde(skip)]
+    frame_undo_stack: Vec<Frame>,
+    #[serde(skip)]
+    frame_redo_stack: Vec<Frame>,
     #[serde(skip)]
     selected: Option<usize>,
 }
@@ -33,6 +43,23 @@ impl Document {
 
     pub fn shapes(&self) -> &[Shape] {
         &self.shapes
+    }
+
+    pub fn frame(&self) -> &Frame {
+        &self.frame
+    }
+
+    /// Replace the frame, recording one undo step.
+    ///
+    /// Frame changes share the annotation history so that undo walks back
+    /// through everything the user did in the order they did it, rather than
+    /// leaving two separate timelines to reason about.
+    pub fn set_frame(&mut self, frame: Frame) {
+        if self.frame == frame {
+            return;
+        }
+        self.checkpoint();
+        self.frame = frame;
     }
 
     pub fn len(&self) -> usize {
@@ -54,12 +81,15 @@ impl Document {
     /// Record the current state so the next mutation can be undone.
     fn checkpoint(&mut self) {
         self.undo_stack.push(self.shapes.clone());
+        self.frame_undo_stack.push(self.frame);
         if self.undo_stack.len() > HISTORY_LIMIT {
             self.undo_stack.remove(0);
+            self.frame_undo_stack.remove(0);
         }
         // Any new edit invalidates the redo branch, exactly as every editor
         // the user has ever used behaves.
         self.redo_stack.clear();
+        self.frame_redo_stack.clear();
     }
 
     pub fn push(&mut self, shape: Shape) -> usize {
@@ -175,6 +205,11 @@ impl Document {
         };
         self.redo_stack
             .push(std::mem::replace(&mut self.shapes, previous));
+
+        if let Some(frame) = self.frame_undo_stack.pop() {
+            self.frame_redo_stack
+                .push(std::mem::replace(&mut self.frame, frame));
+        }
         self.selected = None;
         true
     }
@@ -185,6 +220,11 @@ impl Document {
         };
         self.undo_stack
             .push(std::mem::replace(&mut self.shapes, next));
+
+        if let Some(frame) = self.frame_redo_stack.pop() {
+            self.frame_undo_stack
+                .push(std::mem::replace(&mut self.frame, frame));
+        }
         self.selected = None;
         true
     }
@@ -417,6 +457,51 @@ mod tests {
             assert!(bounds.contains(Point::new(b.x, b.y)));
             assert!(bounds.contains(Point::new(b.right(), b.bottom())));
         }
+    }
+
+    #[test]
+    fn undo_walks_back_through_frame_changes_too() {
+        use crate::frame::Frame;
+
+        let mut doc = Document::new();
+        doc.push(rect_at(0.0, 0.0));
+        doc.set_frame(Frame {
+            padding: 24.0,
+            ..Default::default()
+        });
+        assert_eq!(doc.frame().padding, 24.0);
+
+        // One undo for the frame, one for the shape — the two histories are
+        // interleaved, not separate timelines.
+        assert!(doc.undo());
+        assert_eq!(doc.frame().padding, 0.0);
+        assert_eq!(doc.len(), 1);
+
+        assert!(doc.undo());
+        assert!(doc.is_empty());
+
+        assert!(doc.redo());
+        assert_eq!(doc.len(), 1);
+        assert!(doc.redo());
+        assert_eq!(doc.frame().padding, 24.0);
+    }
+
+    #[test]
+    fn setting_the_same_frame_twice_records_no_history() {
+        use crate::frame::Frame;
+
+        let mut doc = Document::new();
+        let frame = Frame {
+            padding: 8.0,
+            ..Default::default()
+        };
+        doc.set_frame(frame);
+        let after_first = doc.can_undo();
+        doc.set_frame(frame);
+
+        assert!(after_first);
+        doc.undo();
+        assert_eq!(doc.frame().padding, 0.0, "one undo must clear it");
     }
 
     #[test]

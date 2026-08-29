@@ -3,6 +3,9 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   boundsOf,
   closeEditor,
+  defaultShadow,
+  emptyFrame,
+  frameOutputSize,
   editorExport,
   editorSession,
   fromHex,
@@ -12,8 +15,10 @@ import {
   toHex,
   translate,
   TRANSPARENT,
+  type Background,
   type Color,
   type EditorOpened,
+  type Frame,
   type Point,
   type Shape,
 } from "../../lib/editorTypes";
@@ -33,6 +38,7 @@ const TOOLS = [
   { id: "freehand", key: "f", label: "Serbest" },
   { id: "text", key: "t", label: "Metin" },
   { id: "step", key: "n", label: "Adım" },
+  { id: "crop", key: "c", label: "Kırp" },
   { id: "highlight", key: "h", label: "Vurgu" },
   { id: "blur", key: "b", label: "Bulanık" },
   { id: "pixelate", key: "p", label: "Piksel" },
@@ -71,11 +77,14 @@ export default function Editor() {
   const [busy, setBusy] = useState(false);
   /** Index of the text shape currently being typed into, if any. */
   const [editing, setEditing] = useState<number | null>(null);
+  const [frame, setFrame] = useState<Frame>(emptyFrame());
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const undoStack = useRef<Shape[][]>([]);
   const redoStack = useRef<Shape[][]>([]);
+  const frameUndoStack = useRef<Frame[]>([]);
+  const frameRedoStack = useRef<Frame[]>([]);
 
   // ── Session ───────────────────────────────────────────────────────────
 
@@ -97,8 +106,13 @@ export default function Editor() {
 
   const commit = useCallback((next: Shape[]) => {
     undoStack.current.push(shapesRef.current);
-    if (undoStack.current.length > HISTORY_LIMIT) undoStack.current.shift();
+    frameUndoStack.current.push(frameRef.current);
+    if (undoStack.current.length > HISTORY_LIMIT) {
+      undoStack.current.shift();
+      frameUndoStack.current.shift();
+    }
     redoStack.current = [];
+    frameRedoStack.current = [];
     setShapes(renumberSteps(next));
   }, []);
 
@@ -109,11 +123,22 @@ export default function Editor() {
     shapesRef.current = shapes;
   }, [shapes]);
 
+  const frameRef = useRef<Frame>(emptyFrame());
+  useEffect(() => {
+    frameRef.current = frame;
+  }, [frame]);
+
   const undo = useCallback(() => {
     const previous = undoStack.current.pop();
     if (!previous) return;
     redoStack.current.push(shapesRef.current);
     setShapes(previous);
+
+    const previousFrame = frameUndoStack.current.pop();
+    if (previousFrame) {
+      frameRedoStack.current.push(frameRef.current);
+      setFrame(previousFrame);
+    }
     setSelected(null);
   }, []);
 
@@ -122,6 +147,12 @@ export default function Editor() {
     if (!next) return;
     undoStack.current.push(shapesRef.current);
     setShapes(next);
+
+    const nextFrame = frameRedoStack.current.pop();
+    if (nextFrame) {
+      frameUndoStack.current.push(frameRef.current);
+      setFrame(nextFrame);
+    }
     setSelected(null);
   }, []);
 
@@ -139,12 +170,40 @@ export default function Editor() {
     if (!canvas || !ctx || !image || !session) return;
 
     const painted = previewShape ? [...shapes, previewShape] : shapes;
-    drawDocument(ctx, image, session.width, session.height, painted);
+    drawDocument(ctx, image, session.width, session.height, painted, frame);
 
     if (selected !== null && shapes[selected]) {
-      drawSelection(ctx, boundsOf(shapes[selected]), canvas.clientWidth / session.width);
+      // Selection chrome is drawn in output space, so it has to move with the
+      // crop and padding rather than staying in base image coordinates.
+      const bounds = boundsOf(shapes[selected]);
+      drawSelection(
+        ctx,
+        {
+          ...bounds,
+          x: bounds.x - (frame.crop?.x ?? 0) + frame.padding,
+          y: bounds.y - (frame.crop?.y ?? 0) + frame.padding,
+        },
+        canvas.clientWidth / canvas.width,
+      );
     }
-  }, [image, session, shapes, previewShape, selected]);
+  }, [image, session, shapes, previewShape, selected, frame]);
+
+  const [outputWidth, outputHeight] = useMemo(
+    () => (session ? frameOutputSize(frame, [session.width, session.height]) : [0, 0]),
+    [frame, session],
+  );
+
+  /** Frame edits share the undo history with annotations, as in Rust. */
+  const applyFrame = useCallback(
+    (next: Frame) => {
+      undoStack.current.push(shapesRef.current);
+      frameUndoStack.current.push(frame);
+      redoStack.current = [];
+      frameRedoStack.current = [];
+      setFrame(next);
+    },
+    [frame],
+  );
 
   // ── Pointer input ─────────────────────────────────────────────────────
 
@@ -152,13 +211,16 @@ export default function Editor() {
     (event: React.PointerEvent<HTMLCanvasElement>): Point => {
       const canvas = event.currentTarget;
       const rect = canvas.getBoundingClientRect();
-      // The canvas is displayed scaled to fit; map back to image pixels.
+      // The canvas shows output space; map back through the frame into base
+      // image pixels, which is where shapes live.
+      const outX = ((event.clientX - rect.left) / rect.width) * canvas.width;
+      const outY = ((event.clientY - rect.top) / rect.height) * canvas.height;
       return {
-        x: ((event.clientX - rect.left) / rect.width) * canvas.width,
-        y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+        x: outX - frame.padding + (frame.crop?.x ?? 0),
+        y: outY - frame.padding + (frame.crop?.y ?? 0),
       };
     },
-    [],
+    [frame],
   );
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -178,6 +240,11 @@ export default function Editor() {
           before: shapes,
         });
       }
+      return;
+    }
+
+    if (tool === "crop") {
+      setDrag({ tool, origin: point, current: point });
       return;
     }
 
@@ -227,6 +294,16 @@ export default function Editor() {
         redoStack.current = [];
       }
       setDrag(null);
+      return;
+    }
+
+    if (drag.tool === "crop") {
+      const rect = rectFromCorners(drag.origin, drag.current);
+      setDrag(null);
+      // A stray click should not crop the image down to nothing.
+      if (rect.width > 8 && rect.height > 8) {
+        applyFrame({ ...frame, crop: rect });
+      }
       return;
     }
 
@@ -316,13 +393,13 @@ export default function Editor() {
     setBusy(true);
     setError(null);
     try {
-      await editorExport({ shapes });
+      await editorExport({ shapes, frame });
       await closeEditor();
     } catch (e) {
       setError(String(e));
       setBusy(false);
     }
-  }, [shapes]);
+  }, [shapes, frame]);
 
   if (error && !session) {
     return (
@@ -373,7 +450,7 @@ export default function Editor() {
 
         {session && (
           <span className="muted editor__size">
-            {session.width} × {session.height}
+            {outputWidth} × {outputHeight}
           </span>
         )}
         <button type="button" className="button" onClick={() => void closeEditor()}>
@@ -414,6 +491,7 @@ export default function Editor() {
           <p className="editor__note">
             Metin: sürükle, yaz, Enter ile bitir. Shift+Enter satır ekler.
           </p>
+          <FramePanel frame={frame} onChange={applyFrame} />
         </nav>
 
         <div className="editor__canvas-wrap">
@@ -421,8 +499,8 @@ export default function Editor() {
             <canvas
               ref={canvasRef}
               className="editor__canvas"
-              width={session.width}
-              height={session.height}
+              width={outputWidth}
+              height={outputHeight}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -442,6 +520,107 @@ export default function Editor() {
       </div>
     </div>
   );
+}
+
+/** ShareX's image beautifier: padding, corners, shadow and background. */
+function FramePanel({
+  frame,
+  onChange,
+}: {
+  frame: Frame;
+  onChange: (frame: Frame) => void;
+}) {
+  const background = frame.background.kind;
+
+  return (
+    <section className="editor__frame">
+      <h2 className="editor__frame-title">Çerçeve</h2>
+
+      {frame.crop && (
+        <button
+          type="button"
+          className="button"
+          onClick={() => onChange({ ...frame, crop: null })}
+        >
+          Kırpmayı kaldır
+        </button>
+      )}
+
+      <label className="editor__frame-field">
+        <span>Boşluk</span>
+        <input
+          type="range"
+          min={0}
+          max={160}
+          step={4}
+          value={frame.padding}
+          onChange={(event) => onChange({ ...frame, padding: Number(event.target.value) })}
+        />
+      </label>
+
+      <label className="editor__frame-field">
+        <span>Köşe</span>
+        <input
+          type="range"
+          min={0}
+          max={64}
+          step={2}
+          value={frame.corner_radius}
+          onChange={(event) =>
+            onChange({ ...frame, corner_radius: Number(event.target.value) })
+          }
+        />
+      </label>
+
+      <label className="editor__frame-check">
+        <input
+          type="checkbox"
+          checked={frame.shadow !== null}
+          onChange={(event) =>
+            onChange({ ...frame, shadow: event.target.checked ? defaultShadow() : null })
+          }
+        />
+        <span>Gölge</span>
+      </label>
+
+      <label className="editor__frame-field">
+        <span>Zemin</span>
+        <select
+          value={background}
+          onChange={(event) => onChange({ ...frame, background: makeBackground(event.target.value) })}
+        >
+          <option value="transparent">Şeffaf</option>
+          <option value="solid">Düz renk</option>
+          <option value="gradient">Gradyan</option>
+        </select>
+      </label>
+
+      {frame.background.kind === "solid" && (
+        <input
+          type="color"
+          aria-label="Zemin rengi"
+          value={toHex(frame.background.color)}
+          onChange={(event) =>
+            onChange({
+              ...frame,
+              background: { kind: "solid", color: fromHex(event.target.value) },
+            })
+          }
+        />
+      )}
+    </section>
+  );
+}
+
+function makeBackground(kind: string): Background {
+  switch (kind) {
+    case "solid":
+      return { kind: "solid", color: fromHex("#f2f2f0") };
+    case "gradient":
+      return { kind: "gradient", from: fromHex("#5a9bf0"), to: fromHex("#a06bf0"), angle: 45 };
+    default:
+      return { kind: "transparent" };
+  }
 }
 
 /**
@@ -575,6 +754,8 @@ function buildShape(
       };
     case "step":
       return buildStep(drag.current, color, stepNumber);
+    // Handled before this point: they change the frame, not the shape list.
+    case "crop":
     case "select":
       return null;
   }
