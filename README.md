@@ -63,6 +63,9 @@ that language exactly, so those files work unmodified.
 - Hash checking with MD5, SHA-1, SHA-256 and SHA-512 in a single pass, and a
   paste-tolerant comparison
 - Image analysis: size, colour count, transparency and dominant colours
+- Metadata viewer that flags what identifies a person, place or device, and a
+  stripper that writes a clean copy rather than touching the original
+- Directory indexing to HTML, text, JSON or XML
 
 **Organise**
 - Capture history in SQLite, searchable by filename, window title, URL and

@@ -898,6 +898,47 @@ pub fn analyze_last_capture(app: AppHandle) -> Result<kestrel_tools::Analysis, S
     Ok(kestrel_tools::analyze(&image))
 }
 
+/// Metadata on a file, sensitive fields first.
+#[tauri::command]
+pub fn read_metadata(path: String) -> Result<Vec<kestrel_tools::MetadataField>, String> {
+    kestrel_tools::read_metadata(std::path::Path::new(&path)).map_err(err)
+}
+
+/// Write a copy with no metadata.
+///
+/// Never overwrites the original: a privacy tool that destroys the only copy of
+/// a photo while trying to protect it is worse than no tool.
+#[tauri::command]
+pub fn strip_metadata(path: String) -> Result<String, String> {
+    let source = std::path::Path::new(&path);
+    let stem = source
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "image".into());
+    let extension = source
+        .extension()
+        .map(|e| e.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "png".into());
+
+    let destination = source
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join(format!("{stem}-temiz.{extension}"));
+
+    kestrel_tools::strip_metadata(source, &destination).map_err(err)?;
+    Ok(destination.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub fn index_directory(
+    path: String,
+    options: Option<kestrel_tools::IndexOptions>,
+) -> Result<String, String> {
+    let options = options.unwrap_or_default();
+    let tree = kestrel_tools::index(std::path::Path::new(&path), &options).map_err(err)?;
+    kestrel_tools::indexer::render(&tree, &options).map_err(err)
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────
 
 /// Run a workflow by id. Interactive methods open their own UI; direct ones

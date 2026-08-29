@@ -117,6 +117,9 @@ pub fn run() {
             commands::hash_file,
             commands::compare_hash,
             commands::analyze_last_capture,
+            commands::read_metadata,
+            commands::strip_metadata,
+            commands::index_directory,
         ])
         .setup(|app| {
             build_tray(app.handle())?;

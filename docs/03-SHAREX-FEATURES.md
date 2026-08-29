@@ -380,8 +380,8 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | 17 | OCR | `[ ]` | 5 | `ocrs` + opsiyonel native motor |
 | 18 | QR kod (oluştur + tara) | `[x]` | 5 | konum bilgisiyle |
 | 19 | Hash kontrolü | `[ ]` | 5 | MD5/SHA1/SHA256/SHA512 |
-| 20 | Metadata | `[ ]` | 5 | EXIF/IPTC/XMP görüntüle + temizle |
-| 21 | Dizin indeksleyici | `[ ]` | 5 | HTML/TXT/XML/JSON |
+| 20 | Metadata | `[x]` | 5 | EXIF görüntüle + temizle |
+| 21 | Dizin indeksleyici | `[x]` | 5 | HTML/TXT/XML/JSON |
 | 22 | Pano görüntüleyici | `[ ]` | 5 | |
 | 23 | Kenarlıksız pencere | `[ ]` | 6 | Platform otomasyonu |
 | 24 | Pencere inceleme | `[ ]` | 6 | Hiyerarşi, frame, PID |
@@ -527,7 +527,7 @@ Tümü faz 6.
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
-| Araçlar | 25 | 6 | 0 | 19 |
+| Araçlar | 25 | 8 | 0 | 17 |
 | Workflow / otomasyon | 25 | 7 | 1 | 17 |
 | Geçmiş | 10 | 5 | 2 | 3 |
 | Ayarlar | 10 | 1 | 2 | 7 |
