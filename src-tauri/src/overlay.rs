@@ -97,11 +97,18 @@ pub fn begin_region_selection(app: &AppHandle) -> Result<(), String> {
                 .focused(screen.is_primary)
                 .build();
 
-            if let Err(err) = built {
-                tracing::error!(%err, screen_id = screen.id, "could not open the selection overlay");
-                close_overlays(&handle);
-                handle.state::<OverlayState>().0.lock().ok().map(|mut s| s.take());
-                return;
+            match built {
+                // The overlay covers the whole display, but on macOS the Dock
+                // and the menu bar float above an always-on-top window. Without
+                // this the selection looks like it stops short of the bottom of
+                // the screen and clicks there hit the Dock.
+                Ok(window) => crate::window_level::raise_above_shell(&window),
+                Err(err) => {
+                    tracing::error!(%err, screen_id = screen.id, "could not open the selection overlay");
+                    close_overlays(&handle);
+                    handle.state::<OverlayState>().0.lock().ok().map(|mut s| s.take());
+                    return;
+                }
             }
         }
     })
@@ -146,6 +153,60 @@ pub fn finish(app: &AppHandle) -> Option<FrozenFrames> {
 pub fn crop_selection(app: &AppHandle, region: Region) -> Result<kestrel_capture::Capture, String> {
     let frames = finish(app).ok_or("no selection is in progress")?;
     frames.crop(region).map_err(|e| e.to_string())
+}
+
+/// A small crop of the frozen screen around a point, for the magnifier.
+///
+/// This is the one thing the overlay needs pixels for, and it takes only the
+/// pixels it needs. The whole point of keeping the frames in Rust is that a
+/// full-screen image never crosses the IPC boundary; a 33x33 patch is about a
+/// kilobyte, which is a different thing entirely.
+///
+/// Returns the patch as a PNG data URL and the exact colour at the centre, so
+/// the overlay does not have to read it back out of the image and get the
+/// rounding wrong.
+pub fn sample(app: &AppHandle, x: i32, y: i32, radius: u32) -> Result<Sample, String> {
+    let state = app.state::<OverlayState>();
+    let guard = state.0.lock().expect("overlay mutex poisoned");
+    let frames = guard.as_ref().ok_or("no selection is in progress")?;
+
+    // An odd width, so there is a single centre pixel to point the crosshair at.
+    let radius = radius.clamp(1, 32) as i32;
+    let side = (radius * 2 + 1) as u32;
+
+    let capture = frames
+        .crop(Region::new(x - radius, y - radius, side, side))
+        .map_err(|e| e.to_string())?;
+
+    // The crop is clamped to the display, so near an edge it comes back smaller
+    // and the centre is no longer at `radius`. Ask the capture where the point
+    // actually landed rather than assuming.
+    let centre_x = (x - capture.region.x).clamp(0, capture.image.width() as i32 - 1) as u32;
+    let centre_y = (y - capture.region.y).clamp(0, capture.image.height() as i32 - 1) as u32;
+    let pixel = capture.image.get_pixel(centre_x, centre_y);
+
+    Ok(Sample {
+        image: crate::capture_service::encode_preview(&capture.image).map_err(|e| e.to_string())?,
+        width: capture.image.width(),
+        height: capture.image.height(),
+        centre_x,
+        centre_y,
+        hex: format!("#{:02X}{:02X}{:02X}", pixel[0], pixel[1], pixel[2]),
+    })
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Sample {
+    /// The patch as a data URL.
+    pub image: String,
+    pub width: u32,
+    pub height: u32,
+    /// Where the sampled point sits inside the patch. Not always the middle:
+    /// near a screen edge the crop is clipped.
+    pub centre_x: u32,
+    pub centre_y: u32,
+    pub hex: String,
 }
 
 /// Open the window / display picker.

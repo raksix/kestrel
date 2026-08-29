@@ -17,6 +17,7 @@ mod settings;
 mod shortcuts;
 mod uploads;
 mod watch;
+mod window_level;
 
 use kestrel_core::CaptureMethod;
 use tauri::{
@@ -81,6 +82,7 @@ pub fn run() {
             commands::begin_region_capture,
             commands::commit_region_capture,
             commands::cancel_region_capture,
+            commands::overlay_sample,
             commands::open_window_picker,
             commands::close_window_picker,
             commands::get_settings,

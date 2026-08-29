@@ -53,6 +53,44 @@ export function drawDocument(
  * compositing them onto a copy of the screen would bake the dim into any blur
  * or pixelate region.
  */
+/**
+ * Decoded pasted images, keyed by their base64 payload.
+ *
+ * Canvas drawing is synchronous and image decoding is not, so the first paint
+ * after a paste misses and the `redraw` callback brings it back. Keeping the
+ * decoded bitmaps also stops a re-render from re-decoding a screenshot-sized
+ * PNG on every pointer move.
+ */
+const imageCache = new Map<string, HTMLImageElement>();
+
+/** Called when a newly decoded image needs the canvas painted again. */
+let onImageReady: (() => void) | null = null;
+
+export function setImageReadyHandler(handler: (() => void) | null): void {
+  onImageReady = handler;
+}
+
+function loadImage(data: string): void {
+  if (imageCache.has(data) || pendingImages.has(data)) return;
+  pendingImages.add(data);
+
+  const element = new Image();
+  element.onload = () => {
+    pendingImages.delete(data);
+    imageCache.set(data, element);
+    onImageReady?.();
+  };
+  element.onerror = () => {
+    // Leave it out of the cache but stop retrying: a payload that failed once
+    // will fail every frame, and a redraw loop is worse than a missing image.
+    pendingImages.delete(data);
+    imageCache.set(data, element);
+  };
+  element.src = data.startsWith("data:") ? data : `data:image/png;base64,${data}`;
+}
+
+const pendingImages = new Set<string>();
+
 export function drawShapesOnly(
   ctx: CanvasRenderingContext2D,
   shapes: Shape[],
@@ -272,6 +310,22 @@ function drawShape(
       );
       break;
     }
+    case "image": {
+      // Decoding is async and this draw is not, so images are decoded once and
+      // kept. A cache miss paints nothing this frame and schedules a redraw,
+      // which is invisible at the speed a paste happens.
+      const bitmap = imageCache.get(shape.data);
+      if (bitmap) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, shape.opacity));
+        ctx.drawImage(bitmap, shape.rect.x, shape.rect.y, shape.rect.width, shape.rect.height);
+        ctx.restore();
+      } else {
+        void loadImage(shape.data);
+      }
+      break;
+    }
+
     case "speech_balloon": {
       // Tail first, so the bubble fill covers the join and leaves no seam.
       drawBalloonTail(ctx, shape.rect, shape.tail, shape.fill);

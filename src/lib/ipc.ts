@@ -172,6 +172,21 @@ export const commitRegionCapture = (region: Region, document?: string) =>
   invoke<CaptureOutput>("commit_region_capture", { region, document });
 export const cancelRegionCapture = () => invoke<void>("cancel_region_capture");
 
+/** A magnified patch of the frozen screen, for the overlay's magnifier. */
+export interface OverlaySample {
+  /** The patch as a data URL. */
+  image: string;
+  width: number;
+  height: number;
+  /** Where the sampled point sits in the patch — not the middle near an edge. */
+  centreX: number;
+  centreY: number;
+  hex: string;
+}
+
+export const overlaySample = (x: number, y: number, radius?: number) =>
+  invoke<OverlaySample>("overlay_sample", { x, y, radius });
+
 // ── Picker ──────────────────────────────────────────────────────────────
 export const openWindowPicker = (tab: "windows" | "displays" = "windows") =>
   invoke<void>("open_window_picker", { tab });

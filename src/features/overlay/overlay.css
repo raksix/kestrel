@@ -131,17 +131,29 @@
   bottom: 24px;
   transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+  box-sizing: border-box;
   max-width: calc(100vw - 48px);
-  padding: 6px 8px;
+  padding: 8px 12px;
   border: 1px solid rgb(255 255 255 / 0.22);
-  border-radius: 999px;
+  border-radius: 18px;
   background: rgb(20 20 22 / 0.86);
   backdrop-filter: blur(14px);
   font-family: var(--font-sans);
-  flex-wrap: wrap;
+}
+
+/* Tools on one line, actions on the next. Wrapping within a row is the last
+   resort for a very narrow display; the split is what guarantees the confirm
+   button is reachable. */
+.overlay__toolbar-row {
+  display: flex;
+  align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 100%;
 }
 
 .overlay__tool {
@@ -202,4 +214,84 @@
     background: rgb(20 20 22);
     backdrop-filter: none;
   }
+}
+
+/* ── Text input ─────────────────────────────────────────────────────── */
+
+.overlay__text-input {
+  position: absolute;
+  z-index: 40;
+  margin: 0;
+  padding: 2px 4px;
+  border: 1px dashed rgb(255 255 255 / 0.7);
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.35);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  line-height: 1.2;
+  resize: none;
+  outline: none;
+  /* The same dark outline the rendered shape gets, so what is typed looks like
+     what is committed rather than jumping on Enter. */
+  text-shadow:
+    0 1px 0 rgb(0 0 0 / 0.75),
+    0 -1px 0 rgb(0 0 0 / 0.75),
+    1px 0 0 rgb(0 0 0 / 0.75),
+    -1px 0 0 rgb(0 0 0 / 0.75);
+}
+
+/* ── Magnifier ──────────────────────────────────────────────────────── */
+
+.overlay__magnifier {
+  position: absolute;
+  z-index: 45;
+  pointer-events: none;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgb(0 0 0 / 0.85);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 0.5);
+}
+
+.overlay__magnifier-view {
+  position: relative;
+  display: block;
+}
+
+.overlay__magnifier-view img {
+  display: block;
+}
+
+/* A one-pixel grid, so individual pixels are countable rather than implied. */
+.overlay__magnifier-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.12) 1px, transparent 1px);
+}
+
+/* Two rings rather than one colour: a single-colour box disappears against a
+   screenshot of itself. */
+.overlay__magnifier-target {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #fff;
+  outline: 1px solid #000;
+}
+
+.overlay__magnifier-colour {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.overlay__magnifier-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgb(255 255 255 / 0.5);
 }

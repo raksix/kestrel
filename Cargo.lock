@@ -2673,6 +2673,7 @@ dependencies = [
  "kestrel-record",
  "kestrel-tools",
  "kestrel-upload",
+ "objc2-app-kit",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",
@@ -2735,6 +2736,7 @@ name = "kestrel-editor"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
+ "base64 0.22.1",
  "fontdb",
  "image",
  "kestrel-capture",

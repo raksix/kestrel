@@ -72,7 +72,9 @@ export type Shape =
   | { kind: "highlight"; rect: Rect; color: Color }
   | { kind: "blur"; rect: Rect; radius: number }
   | { kind: "pixelate"; rect: Rect; block: number }
-  | { kind: "spotlight"; rect: Rect; dim: number };
+  | { kind: "spotlight"; rect: Rect; dim: number }
+  /** A pasted or dropped image. `data` is a base64 PNG or a full data URL. */
+  | { kind: "image"; rect: Rect; data: string; opacity: number };
 
 export type Background =
   | { kind: "transparent" }

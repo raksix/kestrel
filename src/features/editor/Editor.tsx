@@ -28,7 +28,8 @@ import {
   type Point,
   type Shape,
 } from "../../lib/editorTypes";
-import { drawDocument, drawSelection } from "./canvas";
+import { imageFromEvent, placeAt } from "../../lib/paste";
+import { drawDocument, drawSelection, setImageReadyHandler } from "./canvas";
 import "./editor.css";
 
 /**
@@ -185,6 +186,44 @@ export default function Editor() {
     frameRef.current = frame;
   }, [frame]);
 
+  // ── Paste and drop ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const accept = async (event: ClipboardEvent | DragEvent) => {
+      if (editing !== null) return; // The textarea owns the paste while it is open.
+      const image = await imageFromEvent(event);
+      if (!image || !session) return;
+      event.preventDefault();
+
+      commit([
+        ...shapesRef.current,
+        {
+          kind: "image",
+          rect: placeAt(
+            image,
+            { x: session.width / 2, y: session.height / 2 },
+            { width: session.width, height: session.height },
+          ),
+          data: image.data,
+          opacity: 1,
+        },
+      ]);
+    };
+
+    const onPaste = (event: ClipboardEvent) => void accept(event);
+    const onDrop = (event: DragEvent) => void accept(event);
+    const onDragOver = (event: DragEvent) => event.preventDefault();
+
+    window.addEventListener("paste", onPaste);
+    window.addEventListener("drop", onDrop);
+    window.addEventListener("dragover", onDragOver);
+    return () => {
+      window.removeEventListener("paste", onPaste);
+      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("dragover", onDragOver);
+    };
+  }, [commit, editing, session]);
+
   const undo = useCallback(() => {
     const previous = undoStack.current.pop();
     if (!previous) return;
@@ -228,6 +267,12 @@ export default function Editor() {
 
     const painted = previewShape ? [...shapes, previewShape] : shapes;
     drawDocument(ctx, image, session.width, session.height, painted, frame);
+
+    // A pasted image decodes asynchronously, so the paint right after a paste
+    // has nothing to draw for it yet.
+    setImageReadyHandler(() =>
+      drawDocument(ctx, image, session.width, session.height, painted, frame),
+    );
 
     if (selected !== null && shapes[selected]) {
       // Selection chrome is drawn in output space, so it has to move with the

@@ -29,8 +29,15 @@ that language exactly, so those files work unmodified.
 - Full-screen, per-display and window capture on macOS, Windows, X11 and Wayland
 - Region overlay: drag to select, or click a window to snap to it, with a live
   size readout, crosshair and keyboard nudging
-- Draw on the overlay before capturing — rectangle, ellipse, arrow, line,
-  freehand, step numbers, highlight, blur and pixelate
+- Annotate on the overlay before capturing, with the editor's full tool set
+  and the same keys: rectangle, ellipse, arrow, line, freehand, text, speech
+  balloon, step numbers, highlight, spotlight, blur and pixelate
+- Paste or drop an image straight onto the overlay or the editor. The pixels
+  are carried inside the document, not a path, so it survives the source file
+  being moved
+- A ShareX-style magnifier (M): the pixels under the cursor at 8x with a grid,
+  a crosshair on the exact pixel and its colour in hex
+- Undo and redo while selecting
 - Window and display picker with live thumbnails, keyboard navigable
 - Multi-display capture with correct mixed-DPI compositing
 

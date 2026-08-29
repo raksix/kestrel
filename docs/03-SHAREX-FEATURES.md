@@ -61,7 +61,7 @@ dosyaya kaydetme.
 | Artı imleç (crosshair) | `[x]` | 1 |
 | İpucu şeridi | `[x]` | 1 |
 | Büyüteç + piksel ızgarası + hex kodu | `[ ]` | 2 |
-| Overlay içi renk seçici | `[ ]` | 2 |
+| Overlay içi renk seçici | `[x]` | 2 | büyüteçte hex okuması |
 | Alt araç çubuğu (anotasyon araçları) | `[ ]` | 2 |
 
 ### 2.3 Klavye (ShareX keybind tablosu)
@@ -548,7 +548,7 @@ yazıyor.
 | Bölüm | Toplam madde | Yapıldı | Kısmi | Kalan |
 |---|:-:|:-:|:-:|:-:|
 | Yakalama yöntemleri | 14 | 8 | 0 | 6 |
-| Overlay | 31 | 11 | 1 | 19 |
+| Overlay | 31 | 19 | 1 | 11 |
 | Editör | 33 | 21 | 2 | 10 |
 | Efektler | ~40 | 19 | 1 | ~20 |
 | After-capture / after-upload | 28 | 9 | 0 | 19 |

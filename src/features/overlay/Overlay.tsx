@@ -14,7 +14,10 @@ import {
   type Color,
   type Shape,
 } from "../../lib/editorTypes";
-import { drawShapesOnly } from "../editor/canvas";
+import { drawShapesOnly, setImageReadyHandler } from "../editor/canvas";
+import { imageFromEvent, placeAt } from "../../lib/paste";
+import Magnifier from "./Magnifier";
+import OverlayText from "./OverlayText";
 import OverlayToolbar, { OVERLAY_TOOLS, type OverlayTool } from "./OverlayToolbar";
 import "./overlay.css";
 
@@ -70,6 +73,13 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
   const [drawing, setDrawing] = useState<{ origin: Point; current: Point; points?: Point[] } | null>(
     null,
   );
+  // Text is typed into a real textarea rather than captured key by key, so
+  // input methods, dictation and screen readers all keep working.
+  const [editing, setEditing] = useState<{ rect: Region; balloon: boolean; tail: Point } | null>(
+    null,
+  );
+  const [magnify, setMagnify] = useState(false);
+  const [redoStack, setRedoStack] = useState<Shape[][]>([]);
 
   const committing = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -86,6 +96,30 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
   useEffect(() => {
     shapesRef.current = shapes;
   }, [shapes]);
+
+  /// Add a shape and drop the redo history, as any editor does: once you draw
+  /// something new, the branch you undid is gone.
+  const addShape = useCallback((shape: Shape) => {
+    setShapes((current) => renumberSteps([...current, shape]));
+    setRedoStack([]);
+  }, []);
+
+  const undo = useCallback(() => {
+    setShapes((current) => {
+      if (current.length === 0) return current;
+      setRedoStack((stack) => [...stack, current]);
+      return renumberSteps(current.slice(0, -1));
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    setRedoStack((stack) => {
+      const previous = stack[stack.length - 1];
+      if (!previous) return stack;
+      setShapes(renumberSteps(previous));
+      return stack.slice(0, -1);
+    });
+  }, []);
 
   const commit = useCallback(
     async (region: Region) => {
@@ -175,6 +209,10 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
           return !points || points.length < 2 ? null : { kind: "freehand", points, stroke };
         case "highlight":
           return tiny ? null : { kind: "highlight", rect, color: { ...color, a: 90 } };
+        case "spotlight":
+          // Dims everything *outside* the rectangle, which is the opposite of
+          // a highlight and the right tool for "look here" on a busy screen.
+          return tiny ? null : { kind: "spotlight", rect, dim: 150 };
         case "blur":
           return tiny ? null : { kind: "blur", rect, radius: 12 };
         case "pixelate":
@@ -207,9 +245,18 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const painted = previewShape ? [...shapes, previewShape] : shapes;
-    drawShapesOnly(ctx, painted, canvas.width, canvas.height);
+    const paint = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const painted = previewShape ? [...shapes, previewShape] : shapes;
+      drawShapesOnly(ctx, painted, canvas.width, canvas.height);
+    };
+
+    paint();
+
+    // A pasted image decodes asynchronously, so the first paint after a paste
+    // draws nothing for it. This is how it gets a second chance.
+    setImageReadyHandler(paint);
+    return () => setImageReadyHandler(null);
   }, [shapes, previewShape, size]);
 
   // ── Pointer ───────────────────────────────────────────────────────────
@@ -224,7 +271,7 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
 
     if (tool) {
       if (tool === "step") {
-        setShapes((current) => renumberSteps([...current, buildShape(point, point)!]));
+        addShape(buildShape(point, point)!);
         return;
       }
       setDrawing({
@@ -275,9 +322,25 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
     const point = { x: event.clientX, y: event.clientY };
 
     if (drawing) {
+      // Text and balloons need content before they are worth anything, so the
+      // drag only sizes the box and the textarea decides whether a shape
+      // exists at all.
+      if (tool === "text" || tool === "balloon") {
+        const rect = rectFromPoints(drawing.origin, point);
+        setDrawing(null);
+        setEditing({
+          rect: rect.width < 8 || rect.height < 8 ? { ...rect, width: 220, height: 44 } : rect,
+          balloon: tool === "balloon",
+          // The tail points back at where the drag started, which is the
+          // gesture people already make when they mean "this thing here".
+          tail: drawing.origin,
+        });
+        return;
+      }
+
       const shape = buildShape(drawing.origin, point, drawing.points);
       setDrawing(null);
-      if (shape) setShapes((current) => renumberSteps([...current, shape]));
+      if (shape) addShape(shape);
       return;
     }
 
@@ -298,10 +361,55 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
     void commit(region);
   };
 
+  // ── Paste and drop ────────────────────────────────────────────────────
+
+  const cursorRef = useRef<Point>({ x: 0, y: 0 });
+  useEffect(() => {
+    cursorRef.current = cursor;
+  }, [cursor]);
+
+  useEffect(() => {
+    const accept = async (event: ClipboardEvent | DragEvent) => {
+      const image = await imageFromEvent(event);
+      if (!image) return;
+
+      // Only swallow the event once there is actually an image; pasting text
+      // onto a screenshot should fall through rather than being eaten.
+      event.preventDefault();
+
+      addShape({
+        kind: "image",
+        rect: placeAt(image, cursorRef.current, size),
+        data: image.data,
+        opacity: 1,
+      });
+    };
+
+    const onPaste = (event: ClipboardEvent) => void accept(event);
+    const onDrop = (event: DragEvent) => void accept(event);
+    // Without this the webview navigates to the dropped file and the overlay
+    // is replaced by an image viewer.
+    const onDragOver = (event: DragEvent) => event.preventDefault();
+
+    window.addEventListener("paste", onPaste);
+    window.addEventListener("drop", onDrop);
+    window.addEventListener("dragover", onDragOver);
+    return () => {
+      window.removeEventListener("paste", onPaste);
+      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("dragover", onDragOver);
+    };
+  }, [addShape, size]);
+
   // ── Keyboard ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // The textarea handles its own keys and stops them propagating; this is
+      // the belt to that braces, so a stray focus can never turn typing into
+      // tool switching.
+      if (editing) return;
+
       const mod = event.metaKey || event.ctrlKey;
 
       if (event.key === "Escape") {
@@ -314,7 +422,13 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
       }
       if (mod && event.key.toLowerCase() === "z") {
         event.preventDefault();
-        setShapes((current) => renumberSteps(current.slice(0, -1)));
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (!mod && event.key.toLowerCase() === "m") {
+        event.preventDefault();
+        setMagnify((on) => !on);
         return;
       }
       if (event.key === "Enter" && selection) {
@@ -357,7 +471,7 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cancel, commit, selection, size, tool]);
+  }, [cancel, commit, editing, redo, selection, size, tool, undo]);
 
   const highlight = hovered ? toLocal(hovered.region) : null;
   const active = selection ?? highlight;
@@ -447,15 +561,37 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
           color={color}
           width={strokeWidth}
           canUndo={shapes.length > 0}
+          canRedo={redoStack.length > 0}
+          magnify={magnify}
           onTool={setTool}
           onColor={setColor}
           onWidth={setStrokeWidth}
-          onUndo={() => setShapes((current) => renumberSteps(current.slice(0, -1)))}
+          onUndo={undo}
+          onRedo={redo}
+          onMagnify={setMagnify}
           onCancel={cancel}
           onConfirm={() =>
             void commit(selection ?? { x: 0, y: 0, width: size.width, height: size.height })
           }
         />
+      )}
+
+      {editing && (
+        <OverlayText
+          rect={editing.rect}
+          balloon={editing.balloon}
+          tail={editing.tail}
+          color={color}
+          onCommit={(shape) => {
+            addShape(shape);
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      )}
+
+      {magnify && !busy && !editing && (
+        <Magnifier cursor={cursor} origin={origin} bounds={size} />
       )}
     </div>
   );

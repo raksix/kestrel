@@ -257,6 +257,19 @@ pub enum Shape {
         rect: Rect,
         dim: f32,
     },
+    /// An image dropped or pasted onto the canvas.
+    ///
+    /// The pixels are carried as a base64 PNG inside the document rather than
+    /// as a path. A document has to survive the file it came from being moved
+    /// or deleted — a screenshot annotated with a logo that vanishes when the
+    /// logo is tidied away is not a document, it is a promise.
+    Image {
+        rect: Rect,
+        /// Base64-encoded PNG.
+        data: String,
+        /// 0.0 to 1.0.
+        opacity: f32,
+    },
 }
 
 impl Shape {
@@ -284,7 +297,8 @@ impl Shape {
             | Shape::Highlight { rect, .. }
             | Shape::Blur { rect, .. }
             | Shape::Pixelate { rect, .. }
-            | Shape::Spotlight { rect, .. } => *rect,
+            | Shape::Spotlight { rect, .. }
+            | Shape::Image { rect, .. } => *rect,
             Shape::SpeechBalloon { rect, tail, .. } => {
                 let mut bounds = *rect;
                 // The tail can point anywhere, including outside the bubble.
@@ -332,7 +346,8 @@ impl Shape {
             | Shape::Highlight { rect, .. }
             | Shape::Blur { rect, .. }
             | Shape::Pixelate { rect, .. }
-            | Shape::Spotlight { rect, .. } => *rect = rect.translated(dx, dy),
+            | Shape::Spotlight { rect, .. }
+            | Shape::Image { rect, .. } => *rect = rect.translated(dx, dy),
             Shape::Line { from, to, .. } | Shape::Arrow { from, to, .. } => {
                 move_point(from);
                 move_point(to);
@@ -366,6 +381,7 @@ impl Shape {
             Shape::Blur { .. } => "blur",
             Shape::Pixelate { .. } => "pixelate",
             Shape::Spotlight { .. } => "spotlight",
+            Shape::Image { .. } => "image",
         }
     }
 }

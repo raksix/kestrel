@@ -66,6 +66,11 @@ fn draw_shape(canvas: &mut RgbaImage, shape: &Shape) {
         Shape::Blur { rect, radius } => blur_region(canvas, *rect, *radius),
         Shape::Pixelate { rect, block } => pixelate_region(canvas, *rect, *block),
         Shape::Spotlight { rect, dim } => spotlight(canvas, *rect, *dim),
+        Shape::Image {
+            rect,
+            data,
+            opacity,
+        } => draw_image(canvas, *rect, data, *opacity),
         Shape::Step {
             center,
             radius,
@@ -587,6 +592,63 @@ fn pixelate_region(canvas: &mut RgbaImage, rect: Rect, block: u32) {
 }
 
 /// Darken everything outside the rectangle.
+/// Composite a pasted image into `rect`.
+///
+/// A pasted image that cannot be decoded is skipped rather than drawn as a
+/// placeholder. The document is data, so it can arrive from a file someone
+/// edited by hand; a broken entry should cost that one image, not the export.
+fn draw_image(canvas: &mut RgbaImage, rect: Rect, data: &str, opacity: f32) {
+    let Some(source) = decode_png(data) else {
+        tracing::warn!("skipping a pasted image that could not be decoded");
+        return;
+    };
+
+    let width = rect.width.round().max(1.0) as u32;
+    let height = rect.height.round().max(1.0) as u32;
+    let scaled = image::imageops::resize(
+        &source,
+        width,
+        height,
+        image::imageops::FilterType::CatmullRom,
+    );
+
+    let opacity = opacity.clamp(0.0, 1.0);
+    let left = rect.x.round() as i64;
+    let top = rect.y.round() as i64;
+
+    for (x, y, pixel) in scaled.enumerate_pixels() {
+        let target_x = left + x as i64;
+        let target_y = top + y as i64;
+        // Coverage carries the image's own alpha *and* the shape's opacity, so
+        // a transparent logo stays transparent instead of being flattened onto
+        // an opaque box.
+        let coverage = (pixel[3] as f32 / 255.0) * opacity;
+        blend(
+            canvas,
+            target_x,
+            target_y,
+            Color::rgb(pixel[0], pixel[1], pixel[2]),
+            coverage,
+        );
+    }
+}
+
+fn decode_png(data: &str) -> Option<RgbaImage> {
+    use base64::Engine as _;
+
+    // Accept a bare base64 payload or a full data URL, because the webview
+    // produces the latter and a hand-written document is likely to hold the
+    // former.
+    let payload = data.rsplit_once(",").map(|(_, rest)| rest).unwrap_or(data);
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(payload.trim())
+        .ok()?;
+
+    image::load_from_memory(&bytes)
+        .ok()
+        .map(|image| image.to_rgba8())
+}
+
 fn spotlight(canvas: &mut RgbaImage, rect: Rect, dim: f32) {
     let alpha = (dim.clamp(0.0, 1.0) * 255.0).round() as u8;
     let shade = Color::rgba(0, 0, 0, alpha);
@@ -603,6 +665,150 @@ fn spotlight(canvas: &mut RgbaImage, rect: Rect, dim: f32) {
 
 #[cfg(test)]
 mod tests {
+
+    /// A solid PNG, base64 encoded, the way a paste arrives.
+    fn png_data_url(width: u32, height: u32, colour: [u8; 4]) -> String {
+        use base64::Engine as _;
+        let image = RgbaImage::from_pixel(width, height, Rgba(colour));
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        image
+            .write_to(&mut bytes, image::ImageFormat::Png)
+            .expect("encode");
+        format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes.into_inner())
+        )
+    }
+
+    #[test]
+    fn a_pasted_image_lands_where_it_was_put() {
+        let mut canvas = RgbaImage::from_pixel(40, 40, Rgba([0, 0, 0, 255]));
+        draw_shape(
+            &mut canvas,
+            &Shape::Image {
+                rect: Rect::new(10.0, 10.0, 10.0, 10.0),
+                data: png_data_url(4, 4, [255, 0, 0, 255]),
+                opacity: 1.0,
+            },
+        );
+
+        assert_eq!(canvas.get_pixel(15, 15), &Rgba([255, 0, 0, 255]));
+        assert_eq!(
+            canvas.get_pixel(2, 2),
+            &Rgba([0, 0, 0, 255]),
+            "outside untouched"
+        );
+    }
+
+    #[test]
+    fn a_pasted_image_is_scaled_to_its_rectangle() {
+        // The source is 4x4 and the rect is 20x20; without scaling only a
+        // corner would be painted.
+        let mut canvas = RgbaImage::from_pixel(40, 40, Rgba([0, 0, 0, 255]));
+        draw_shape(
+            &mut canvas,
+            &Shape::Image {
+                rect: Rect::new(0.0, 0.0, 20.0, 20.0),
+                data: png_data_url(4, 4, [0, 255, 0, 255]),
+                opacity: 1.0,
+            },
+        );
+
+        assert_eq!(canvas.get_pixel(19, 19), &Rgba([0, 255, 0, 255]));
+    }
+
+    #[test]
+    fn opacity_blends_rather_than_replacing() {
+        let mut canvas = RgbaImage::from_pixel(20, 20, Rgba([0, 0, 0, 255]));
+        draw_shape(
+            &mut canvas,
+            &Shape::Image {
+                rect: Rect::new(0.0, 0.0, 10.0, 10.0),
+                data: png_data_url(2, 2, [255, 255, 255, 255]),
+                opacity: 0.5,
+            },
+        );
+
+        let pixel = canvas.get_pixel(5, 5);
+        assert!(
+            pixel[0] > 100 && pixel[0] < 160,
+            "should be mid grey: {pixel:?}"
+        );
+    }
+
+    #[test]
+    fn a_transparent_source_stays_transparent() {
+        // A logo with an alpha channel must not be flattened onto an opaque box.
+        let mut canvas = RgbaImage::from_pixel(20, 20, Rgba([0, 0, 255, 255]));
+        draw_shape(
+            &mut canvas,
+            &Shape::Image {
+                rect: Rect::new(0.0, 0.0, 10.0, 10.0),
+                data: png_data_url(2, 2, [255, 0, 0, 0]),
+                opacity: 1.0,
+            },
+        );
+
+        assert_eq!(canvas.get_pixel(5, 5), &Rgba([0, 0, 255, 255]));
+    }
+
+    #[test]
+    fn an_image_pasted_partly_off_canvas_is_clipped_not_wrapped() {
+        // Painting past the edge would either panic or wrap around to the other
+        // side, and both look like corruption.
+        let mut canvas = RgbaImage::from_pixel(20, 20, Rgba([0, 0, 0, 255]));
+        draw_shape(
+            &mut canvas,
+            &Shape::Image {
+                rect: Rect::new(15.0, 15.0, 20.0, 20.0),
+                data: png_data_url(2, 2, [255, 255, 0, 255]),
+                opacity: 1.0,
+            },
+        );
+
+        assert_eq!(canvas.get_pixel(18, 18), &Rgba([255, 255, 0, 255]));
+        assert_eq!(
+            canvas.get_pixel(1, 1),
+            &Rgba([0, 0, 0, 255]),
+            "no wrap-around"
+        );
+    }
+
+    #[test]
+    fn an_undecodable_image_costs_only_itself() {
+        // Documents are data and can be hand-edited; one broken entry must not
+        // take the export with it.
+        let mut canvas = RgbaImage::from_pixel(20, 20, Rgba([7, 7, 7, 255]));
+        draw_shape(
+            &mut canvas,
+            &Shape::Image {
+                rect: Rect::new(0.0, 0.0, 10.0, 10.0),
+                data: "not base64 at all".into(),
+                opacity: 1.0,
+            },
+        );
+
+        assert_eq!(canvas.get_pixel(5, 5), &Rgba([7, 7, 7, 255]));
+    }
+
+    #[test]
+    fn a_bare_base64_payload_works_as_well_as_a_data_url() {
+        let url = png_data_url(2, 2, [10, 200, 10, 255]);
+        let bare = url.rsplit_once(',').unwrap().1.to_string();
+
+        let mut canvas = RgbaImage::from_pixel(20, 20, Rgba([0, 0, 0, 255]));
+        draw_shape(
+            &mut canvas,
+            &Shape::Image {
+                rect: Rect::new(0.0, 0.0, 10.0, 10.0),
+                data: bare,
+                opacity: 1.0,
+            },
+        );
+
+        assert_eq!(canvas.get_pixel(5, 5), &Rgba([10, 200, 10, 255]));
+    }
+
     use super::*;
     use crate::shape::Stroke;
 

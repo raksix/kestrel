@@ -1612,3 +1612,17 @@ pub fn set_audio(
         })
         .map_err(err)
 }
+
+/// A magnified patch of the frozen screen under the overlay's cursor.
+///
+/// Called on pointer move while the magnifier is showing, so it stays small and
+/// synchronous: a 33x33 patch is about a kilobyte.
+#[tauri::command]
+pub fn overlay_sample(
+    app: AppHandle,
+    x: i32,
+    y: i32,
+    radius: Option<u32>,
+) -> Result<crate::overlay::Sample, String> {
+    crate::overlay::sample(&app, x, y, radius.unwrap_or(12))
+}
