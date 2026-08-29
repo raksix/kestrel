@@ -133,6 +133,8 @@ export interface EditorOpened {
   path: string;
   width: number;
   height: number;
+  /** Bumped whenever Rust rewrites the staged file, to bust the webview cache. */
+  revision: number;
 }
 
 export const openEditor = () => invoke<EditorOpened>("open_editor");
@@ -140,6 +142,79 @@ export const editorSession = () => invoke<EditorOpened>("editor_session");
 export const closeEditor = () => invoke<void>("close_editor");
 export const editorExport = (document: EditorDocument) =>
   invoke<CaptureOutput>("editor_export", { document: JSON.stringify(document) });
+
+// ── Image effects ───────────────────────────────────────────────────────
+
+/** Mirrors `kestrel_editor::Effect`; the tag is serde's `kind`. */
+export type Effect =
+  | { kind: "resize"; width: number; height: number; keep_aspect: boolean }
+  | { kind: "rotate"; rotation: Rotation }
+  | { kind: "flip"; horizontal: boolean; vertical: boolean }
+  | { kind: "auto_crop"; tolerance: number }
+  | { kind: "brightness"; amount: number }
+  | { kind: "contrast"; amount: number }
+  | { kind: "gamma"; value: number }
+  | { kind: "saturation"; amount: number }
+  | { kind: "opacity"; amount: number }
+  | { kind: "grayscale" }
+  | { kind: "sepia" }
+  | { kind: "invert" }
+  | { kind: "blur"; radius: number }
+  | { kind: "sharpen"; amount: number }
+  | { kind: "pixelate"; block: number }
+  | { kind: "border"; width: number; color: Color };
+
+export type Rotation = "none" | "quarter" | "half" | "three_quarters";
+
+/** Kinds that move pixels — mirrors `Effect::changes_geometry`. */
+const GEOMETRIC = new Set(["resize", "rotate", "flip", "auto_crop", "border"]);
+
+export const changesGeometry = (effects: Effect[]) =>
+  effects.some((effect) => GEOMETRIC.has(effect.kind));
+
+export const editorSetEffects = (effects: Effect[], annotationCount: number) =>
+  invoke<EditorOpened>("editor_set_effects", { effects, annotationCount });
+
+export interface SxiePreset {
+  name: string | null;
+  effects: Effect[];
+  /** Effects in the file Kestrel has no equivalent for. */
+  unsupported: string[];
+}
+
+export const importSxie = (path: string) => invoke<SxiePreset>("import_sxie", { path });
+
+/** A new effect of each kind, with the values ShareX defaults to. */
+export function defaultEffect(kind: Effect["kind"], size: [number, number]): Effect {
+  switch (kind) {
+    case "resize":
+      return { kind, width: size[0], height: size[1], keep_aspect: true };
+    case "rotate":
+      return { kind, rotation: "quarter" };
+    case "flip":
+      return { kind, horizontal: true, vertical: false };
+    case "auto_crop":
+      return { kind, tolerance: 10 };
+    case "brightness":
+    case "contrast":
+    case "saturation":
+      return { kind, amount: 0.2 };
+    case "gamma":
+      return { kind, value: 1.2 };
+    case "opacity":
+      return { kind, amount: 0.8 };
+    case "blur":
+      return { kind, radius: 6 };
+    case "sharpen":
+      return { kind, amount: 0.5 };
+    case "pixelate":
+      return { kind, block: 10 };
+    case "border":
+      return { kind, width: 4, color: rgba(0, 0, 0) };
+    default:
+      return { kind } as Effect;
+  }
+}
 
 // ── Colour helpers ──────────────────────────────────────────────────────
 

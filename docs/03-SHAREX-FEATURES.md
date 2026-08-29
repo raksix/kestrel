@@ -158,23 +158,43 @@ kopyala · görsel ekleme diyaloğunu göster — tümü `[ ]` faz 2.
 
 ## 4. Görsel efektleri (`.sxie` uyumlu)
 
-Tümü faz 5.
+Faz 5. Zincir `kestrel-editor::Chain` olarak sıralı veri: sıra resmin parçası,
+çünkü bulanıklaştırıp kenarlık eklemek ile kenarlık ekleyip bulanıklaştırmak
+aynı görseli vermez. Zincir her zaman dokunulmamış orijinale uygulanır, bu yüzden
+bir efekti kaldırmak onu gerçekten geri alır.
 
-**Manipülasyonlar:** yeniden boyutlandır · kırp · otomatik kırp · kanvas ·
-döndür · çevir · yuvarlatılmış köşe · kenar yumuşatma · şeffaflık zemini
+**Manipülasyonlar:** yeniden boyutlandır `[x]` · otomatik kırp `[x]` ·
+döndür `[x]` · çevir `[x]` · kırp `[x]` (çerçeve aracında) ·
+yuvarlatılmış köşe `[x]` (çerçeve aracında) · kanvas `[ ]` ·
+kenar yumuşatma `[ ]` · şeffaflık zemini `[ ]`
 
-**Ayarlamalar:** parlaklık · kontrast · gama · doygunluk · ton · alfa ·
-renk matrisi · seviyeler · eğriler · renk dengesi
+**Ayarlamalar:** parlaklık `[x]` · kontrast `[x]` · gama `[x]` ·
+doygunluk `[x]` · alfa `[x]` · ton `[ ]` · renk matrisi `[ ]` · seviyeler `[ ]` ·
+eğriler `[ ]` · renk dengesi `[ ]`
 
-**Filtreler:** bulanıklık · gauss bulanıklığı · keskinleştir · gürültü ekle ·
-pikselleştir · gri ton · sepya · negatif · dış hat (edge detect) · emboss ·
-konvolüsyon matrisi · renk ayırma (posterize) · eşikleme
+**Filtreler:** bulanıklık `[x]` · keskinleştir `[x]` · pikselleştir `[x]` ·
+gri ton `[x]` · sepya `[x]` · negatif `[x]` · gürültü ekle `[ ]` ·
+dış hat `[ ]` · emboss `[ ]` · konvolüsyon matrisi `[ ]` ·
+renk ayırma `[ ]` · eşikleme `[ ]`
 
-**Çizimler:** kenarlık · gölge · metin filigranı · görsel filigranı ·
-arka plan · parçacık · köşe kesme · çerçeve
+**Çizimler:** kenarlık `[x]` · gölge `[x]` (çerçeve aracında) ·
+arka plan `[x]` (çerçeve aracında) · metin filigranı `[ ]` ·
+görsel filigranı `[ ]` · parçacık `[ ]` · köşe kesme `[ ]` · çerçeve `[ ]`
 
-**Altyapı:** efekt zinciri sırası · ön ayar kaydet/yükle · `.sxie` içe aktarma ·
-canlı önizleme · öncesi/sonrası karşılaştırma.
+**Altyapı:** efekt zinciri sırası `[x]` · canlı önizleme `[x]` ·
+`.sxie` içe aktarma `[~]` · ön ayar kaydet/yükle `[ ]` ·
+öncesi/sonrası karşılaştırma `[ ]`
+
+`.sxie` kısmi işaretli çünkü **format belgelenmiş değil.** ShareX `.sxcu`'yu
+ayrıntısıyla yayımlıyor, `.sxie`'yi yayımlamıyor; içe aktarıcı Json.NET
+çıktısının şekline (`$type` ayırıcısı, PascalCase alanlar) göre yazıldı ve bu
+varsayım doğrulanmadı. Bu yüzden karşılığı olmayan efekt **sessizce atlanmaz,
+kullanıcıya adıyla bildirilir** — yarım aktarılmış bir ön ayar, kullanıcının
+kurduğu görsel değildir.
+
+Boyut değiştiren efektler (yeniden boyutlandır, döndür, çevir, otomatik kırp,
+kenarlık) çizim varken reddedilir: anotasyonlar taban görselin koordinatlarında
+saklanıyor, resim kayarsa her ok yanlış yeri gösterir.
 
 ---
 
@@ -187,7 +207,7 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | 1 | Hızlı görev menüsünü göster | `[ ]` | 3 |
 | 2 | "Yakalama sonrası" penceresini göster | `[ ]` | 3 |
 | 3 | Görseli güzelleştir | `[x]` | 2 |
-| 4 | Görsel efektleri uygula | `[ ]` | 5 |
+| 4 | Görsel efektleri uygula | `[~]` | 5 |
 | 5 | Editörde aç | `[x]` | 2 |
 | 6 | Panoya kopyala | `[x]` | 1 |
 | 7 | Ekrana sabitle | `[x]` | 2 |
@@ -522,7 +542,7 @@ Tümü faz 6.
 | Yakalama yöntemleri | 14 | 8 | 0 | 6 |
 | Overlay | 31 | 11 | 1 | 19 |
 | Editör | 33 | 21 | 2 | 10 |
-| Efektler | ~40 | 0 | 0 | ~40 |
+| Efektler | ~40 | 19 | 1 | ~20 |
 | After-capture / after-upload | 28 | 9 | 0 | 19 |
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |

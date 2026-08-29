@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use image::RgbaImage;
-use kestrel_editor::Document;
+use kestrel_editor::{Chain, Document};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -42,9 +42,21 @@ impl LastCapture {
 pub struct EditorState(pub Mutex<Option<EditorSession>>);
 
 pub struct EditorSession {
+    /// The capture as it arrived, never modified.
+    ///
+    /// The effect chain is always applied to this rather than to the previous
+    /// result, so removing an effect restores exactly what was there before.
+    /// Applying effects in place would make the chain one-way: you could add a
+    /// blur but never get the sharp pixels back.
+    pub original: RgbaImage,
+    /// `original` with the current effect chain applied — what the canvas shows
+    /// and what the export renders onto.
     pub base: RgbaImage,
+    pub effects: Chain,
     /// Where the base image was staged for the webview to load.
     pub staged: PathBuf,
+    /// Bumped whenever `staged` is rewritten, so the webview can bust its cache.
+    pub revision: u32,
 }
 
 impl EditorState {
@@ -72,6 +84,8 @@ pub struct EditorOpened {
     pub path: String,
     pub width: u32,
     pub height: u32,
+    /// Changes every time the staged file is rewritten.
+    pub revision: u32,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -88,6 +102,8 @@ pub enum EditorError {
     Window(#[from] tauri::Error),
     #[error("the annotation document is not valid: {0}")]
     Document(#[from] serde_json::Error),
+    #[error("resize, rotate, flip, crop and border move the image, which would leave the existing annotations pointing at the wrong pixels — apply them before annotating")]
+    GeometryWouldMoveAnnotations,
 }
 
 pub type Result<T> = std::result::Result<T, EditorError>;
@@ -98,8 +114,11 @@ pub fn open(app: &AppHandle, image: RgbaImage) -> Result<EditorOpened> {
     let staged = stage(app, &image)?;
 
     app.state::<EditorState>().set(EditorSession {
+        original: image.clone(),
         base: image,
+        effects: Chain::default(),
         staged: staged.clone(),
+        revision: 0,
     });
 
     // macOS creates windows on the main thread only, and Tauri's builder called
@@ -133,6 +152,7 @@ pub fn open(app: &AppHandle, image: RgbaImage) -> Result<EditorOpened> {
         path: staged.to_string_lossy().into_owned(),
         width,
         height,
+        revision: 0,
     })
 }
 
@@ -155,6 +175,7 @@ pub fn session(app: &AppHandle) -> Result<EditorOpened> {
         path: session.staged.to_string_lossy().into_owned(),
         width: session.base.width(),
         height: session.base.height(),
+        revision: session.revision,
     })
 }
 
@@ -170,6 +191,50 @@ pub fn render(app: &AppHandle, document_json: &str) -> Result<RgbaImage> {
         .ok_or(EditorError::NoSession)?;
     let document: Document = serde_json::from_str(document_json)?;
     Ok(kestrel_editor::render(&base, &document))
+}
+
+/// Replace the effect chain and restage the result.
+///
+/// The chain is applied to the untouched original every time, so removing an
+/// effect genuinely undoes it.
+///
+/// `annotation_count` comes from the canvas because the webview owns the live
+/// document. It matters: annotations are stored in base-image coordinates, so a
+/// rotate or a crop would leave every existing arrow pointing at the wrong
+/// pixels. Rather than silently misplace them, geometry-changing effects are
+/// refused while annotations exist and the caller is told why.
+pub fn apply_effects(
+    app: &AppHandle,
+    effects: Chain,
+    annotation_count: usize,
+) -> Result<EditorOpened> {
+    if annotation_count > 0 && effects.changes_geometry() {
+        return Err(EditorError::GeometryWouldMoveAnnotations);
+    }
+
+    let state = app.state::<EditorState>();
+    let mut guard = state.0.lock().expect("editor mutex poisoned");
+    let session = guard.as_mut().ok_or(EditorError::NoSession)?;
+
+    let base = effects.apply(&session.original);
+    let (width, height) = (base.width(), base.height());
+
+    let staged = session.staged.clone();
+    base.save(&staged)?;
+
+    session.base = base;
+    session.effects = effects;
+    // The path never changes, so the webview would happily serve the previous
+    // image from cache. The revision gives the frontend something to bust it
+    // with.
+    session.revision += 1;
+
+    Ok(EditorOpened {
+        path: staged.to_string_lossy().into_owned(),
+        width,
+        height,
+        revision: session.revision,
+    })
 }
 
 pub fn close(app: &AppHandle) {
@@ -230,8 +295,11 @@ mod tests {
     fn clearing_an_editor_state_yields_the_session_once() {
         let state = EditorState::default();
         state.set(EditorSession {
+            original: RgbaImage::new(2, 2),
             base: RgbaImage::new(2, 2),
+            effects: Chain::default(),
             staged: PathBuf::from("/tmp/does-not-exist.png"),
+            revision: 0,
         });
 
         assert!(state.clear().is_some());

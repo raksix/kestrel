@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   boundsOf,
+  changesGeometry,
   closeEditor,
+  defaultEffect,
   defaultShadow,
   emptyFrame,
   frameOutputSize,
   editorExport,
   editorSession,
+  editorSetEffects,
   fromHex,
+  importSxie,
   hitTest,
   rectFromCorners,
   renumberSteps,
@@ -18,6 +23,7 @@ import {
   type Background,
   type Color,
   type EditorOpened,
+  type Effect,
   type Frame,
   type Point,
   type Shape,
@@ -78,6 +84,9 @@ export default function Editor() {
   /** Index of the text shape currently being typed into, if any. */
   const [editing, setEditing] = useState<number | null>(null);
   const [frame, setFrame] = useState<Frame>(emptyFrame());
+  const [effects, setEffects] = useState<Effect[]>([]);
+  const [effectsBusy, setEffectsBusy] = useState(false);
+  const [sxieNote, setSxieNote] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
@@ -88,19 +97,67 @@ export default function Editor() {
 
   // ── Session ───────────────────────────────────────────────────────────
 
+  const loadBase = useCallback((opened: EditorOpened) => {
+    setSession(opened);
+    const img = new Image();
+    // The base is served from disk over the asset protocol; a data URL for
+    // a full-resolution capture is megabytes of base64. The revision is a
+    // cache buster — the path stays the same when effects rewrite the file.
+    img.src = `${convertFileSrc(opened.path)}?r=${opened.revision}`;
+    img.onload = () => setImage(img);
+    img.onerror = () => setError("Görsel yüklenemedi.");
+  }, []);
+
   useEffect(() => {
     editorSession()
-      .then((opened) => {
-        setSession(opened);
-        const img = new Image();
-        // The base is served from disk over the asset protocol; a data URL for
-        // a full-resolution capture is megabytes of base64.
-        img.src = convertFileSrc(opened.path);
-        img.onload = () => setImage(img);
-        img.onerror = () => setError("Görsel yüklenemedi.");
-      })
+      .then(loadBase)
       .catch((e) => setError(String(e)));
-  }, []);
+  }, [loadBase]);
+
+  // ── Effects ───────────────────────────────────────────────────────────
+
+  const applyEffects = useCallback(
+    (next: Effect[]) => {
+      // Rust owns this: the chain is applied to the untouched original, so a
+      // removed effect really is undone rather than approximated.
+      //
+      // The list is only updated once Rust accepts it. Showing the effect
+      // first would leave the panel claiming a blur that the image does not
+      // have when the call is refused.
+      setEffectsBusy(true);
+      editorSetEffects(next, shapesRef.current.length)
+        .then((opened) => {
+          setError(null);
+          setEffects(next);
+          loadBase(opened);
+        })
+        .catch((e) => setError(String(e)))
+        .finally(() => setEffectsBusy(false));
+    },
+    [loadBase],
+  );
+
+  const importPreset = useCallback(async () => {
+    const chosen = await openDialog({
+      filters: [{ name: "ShareX görsel efektleri", extensions: ["sxie", "json"] }],
+    });
+    if (!chosen || Array.isArray(chosen)) return;
+
+    try {
+      const preset = await importSxie(chosen);
+      // Say what was left out. The `.sxie` format is not documented, so a
+      // preset can legitimately contain effects Kestrel has no equivalent for
+      // — and quietly applying the rest would be the wrong kind of helpful.
+      setSxieNote(
+        preset.unsupported.length > 0
+          ? `${preset.unsupported.length} efekt aktarılamadı: ${preset.unsupported.join(", ")}`
+          : null,
+      );
+      applyEffects([...effects, ...preset.effects]);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [applyEffects, effects]);
 
   // ── History ───────────────────────────────────────────────────────────
 
@@ -492,6 +549,15 @@ export default function Editor() {
             Metin: sürükle, yaz, Enter ile bitir. Shift+Enter satır ekler.
           </p>
           <FramePanel frame={frame} onChange={applyFrame} />
+          <EffectsPanel
+            effects={effects}
+            busy={effectsBusy}
+            locked={shapes.length > 0}
+            note={sxieNote}
+            size={session ? [session.width, session.height] : [0, 0]}
+            onChange={applyEffects}
+            onImport={importPreset}
+          />
         </nav>
 
         <div className="editor__canvas-wrap">
@@ -520,6 +586,342 @@ export default function Editor() {
       </div>
     </div>
   );
+}
+
+/** The effect kinds offered, grouped as ShareX groups them. */
+const EFFECT_GROUPS: { label: string; kinds: [Effect["kind"], string][] }[] = [
+  {
+    label: "Boyut",
+    kinds: [
+      ["resize", "Yeniden boyutlandır"],
+      ["rotate", "Döndür"],
+      ["flip", "Aynala"],
+      ["auto_crop", "Otomatik kırp"],
+    ],
+  },
+  {
+    label: "Ayar",
+    kinds: [
+      ["brightness", "Parlaklık"],
+      ["contrast", "Kontrast"],
+      ["gamma", "Gama"],
+      ["saturation", "Doygunluk"],
+      ["opacity", "Saydamlık"],
+    ],
+  },
+  {
+    label: "Filtre",
+    kinds: [
+      ["grayscale", "Gri tonlama"],
+      ["sepia", "Sepya"],
+      ["invert", "Tersle"],
+      ["blur", "Bulanıklaştır"],
+      ["sharpen", "Keskinleştir"],
+      ["pixelate", "Pikselleştir"],
+    ],
+  },
+  { label: "Çizim", kinds: [["border", "Kenarlık"]] },
+];
+
+const EFFECT_LABELS = new Map(EFFECT_GROUPS.flatMap((group) => group.kinds));
+
+/**
+ * ShareX's image effect chain.
+ *
+ * The order is the point — a blur then a border is not the same picture as a
+ * border then a blur — so the list is reorderable rather than a set of toggles.
+ */
+function EffectsPanel({
+  effects,
+  busy,
+  locked,
+  note,
+  size,
+  onChange,
+  onImport,
+}: {
+  effects: Effect[];
+  busy: boolean;
+  /** True once annotations exist, which rules out geometry-changing effects. */
+  locked: boolean;
+  note: string | null;
+  size: [number, number];
+  onChange: (effects: Effect[]) => void;
+  onImport: () => void;
+}) {
+  const replace = (index: number, effect: Effect) =>
+    onChange(effects.map((existing, i) => (i === index ? effect : existing)));
+
+  const move = (index: number, by: number) => {
+    const to = index + by;
+    if (to < 0 || to >= effects.length) return;
+    const next = [...effects];
+    [next[index], next[to]] = [next[to], next[index]];
+    onChange(next);
+  };
+
+  return (
+    <section className="editor__frame">
+      <h2 className="editor__frame-title">Efektler</h2>
+
+      {locked && (
+        <p className="editor__note">
+          Çizim varken boyut değiştiren efektler kapalı — resim kayarsa
+          işaretlemeler yanlış yere düşer.
+        </p>
+      )}
+
+      <label className="editor__frame-field">
+        <span>Ekle</span>
+        <select
+          className="input"
+          value=""
+          disabled={busy}
+          onChange={(e) => {
+            if (!e.target.value) return;
+            onChange([...effects, defaultEffect(e.target.value as Effect["kind"], size)]);
+            e.target.value = "";
+          }}
+        >
+          <option value="">Efekt seç…</option>
+          {EFFECT_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.kinds.map(([kind, label]) => (
+                <option
+                  key={kind}
+                  value={kind}
+                  disabled={locked && changesGeometry([{ kind } as Effect])}
+                >
+                  {label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+
+      <ol className="editor__effects">
+        {effects.map((effect, index) => (
+          <li key={`${effect.kind}-${index}`} className="editor__effect">
+            <div className="editor__effect-head">
+              <span className="editor__effect-name">
+                {index + 1}. {EFFECT_LABELS.get(effect.kind) ?? effect.kind}
+              </span>
+              <button
+                type="button"
+                className="button button--icon"
+                aria-label="Yukarı taşı"
+                disabled={busy || index === 0}
+                onClick={() => move(index, -1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="button button--icon"
+                aria-label="Aşağı taşı"
+                disabled={busy || index === effects.length - 1}
+                onClick={() => move(index, 1)}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                className="button button--icon"
+                aria-label="Kaldır"
+                disabled={busy}
+                onClick={() => onChange(effects.filter((_, i) => i !== index))}
+              >
+                ✕
+              </button>
+            </div>
+            <EffectControls
+              effect={effect}
+              disabled={busy}
+              onChange={(next) => replace(index, next)}
+            />
+          </li>
+        ))}
+      </ol>
+
+      {effects.length > 0 && (
+        <button
+          type="button"
+          className="button"
+          disabled={busy}
+          onClick={() => onChange([])}
+        >
+          Tümünü kaldır
+        </button>
+      )}
+
+      <button type="button" className="button" disabled={busy} onClick={onImport}>
+        .sxie içe aktar…
+      </button>
+      {note && <p className="editor__note">{note}</p>}
+    </section>
+  );
+}
+
+/** The one control each effect needs, or nothing for the ones with no options. */
+function EffectControls({
+  effect,
+  disabled,
+  onChange,
+}: {
+  effect: Effect;
+  disabled: boolean;
+  onChange: (effect: Effect) => void;
+}) {
+  const slider = (
+    label: string,
+    value: number,
+    min: number,
+    max: number,
+    step: number,
+    apply: (value: number) => Effect,
+  ) => (
+    <label className="editor__frame-field">
+      <span>{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(apply(Number(e.target.value)))}
+      />
+      <span className="editor__value">{value}</span>
+    </label>
+  );
+
+  switch (effect.kind) {
+    case "brightness":
+    case "contrast":
+    case "saturation":
+      return slider("Miktar", effect.amount, -1, 1, 0.05, (amount) => ({ ...effect, amount }));
+    case "opacity":
+      return slider("Miktar", effect.amount, 0, 1, 0.05, (amount) => ({ ...effect, amount }));
+    case "gamma":
+      return slider("Değer", effect.value, 0.1, 3, 0.05, (value) => ({ ...effect, value }));
+    case "blur":
+      return slider("Yarıçap", effect.radius, 1, 40, 1, (radius) => ({ ...effect, radius }));
+    case "sharpen":
+      return slider("Miktar", effect.amount, 0, 2, 0.05, (amount) => ({ ...effect, amount }));
+    case "pixelate":
+      return slider("Blok", effect.block, 2, 64, 1, (block) => ({ ...effect, block }));
+    case "auto_crop":
+      return slider("Tolerans", effect.tolerance, 0, 64, 1, (tolerance) => ({
+        ...effect,
+        tolerance,
+      }));
+
+    case "resize":
+      return (
+        <>
+          <label className="editor__frame-field">
+            <span>Genişlik</span>
+            <input
+              type="number"
+              className="input"
+              min={1}
+              value={effect.width}
+              disabled={disabled}
+              onChange={(e) =>
+                onChange({ ...effect, width: Math.max(1, Number(e.target.value)) })
+              }
+            />
+          </label>
+          <label className="editor__frame-field">
+            <span>Yükseklik</span>
+            <input
+              type="number"
+              className="input"
+              min={1}
+              value={effect.height}
+              disabled={disabled}
+              onChange={(e) =>
+                onChange({ ...effect, height: Math.max(1, Number(e.target.value)) })
+              }
+            />
+          </label>
+          <label className="editor__frame-check">
+            <input
+              type="checkbox"
+              checked={effect.keep_aspect}
+              disabled={disabled}
+              onChange={(e) => onChange({ ...effect, keep_aspect: e.target.checked })}
+            />
+            <span>Oranı koru</span>
+          </label>
+        </>
+      );
+
+    case "rotate":
+      return (
+        <label className="editor__frame-field">
+          <span>Açı</span>
+          <select
+            className="input"
+            value={effect.rotation}
+            disabled={disabled}
+            onChange={(e) =>
+              onChange({ ...effect, rotation: e.target.value as typeof effect.rotation })
+            }
+          >
+            <option value="none">0°</option>
+            <option value="quarter">90°</option>
+            <option value="half">180°</option>
+            <option value="three_quarters">270°</option>
+          </select>
+        </label>
+      );
+
+    case "flip":
+      return (
+        <>
+          <label className="editor__frame-check">
+            <input
+              type="checkbox"
+              checked={effect.horizontal}
+              disabled={disabled}
+              onChange={(e) => onChange({ ...effect, horizontal: e.target.checked })}
+            />
+            <span>Yatay</span>
+          </label>
+          <label className="editor__frame-check">
+            <input
+              type="checkbox"
+              checked={effect.vertical}
+              disabled={disabled}
+              onChange={(e) => onChange({ ...effect, vertical: e.target.checked })}
+            />
+            <span>Dikey</span>
+          </label>
+        </>
+      );
+
+    case "border":
+      return (
+        <>
+          {slider("Kalınlık", effect.width, 0, 40, 1, (width) => ({ ...effect, width }))}
+          <label className="editor__frame-field">
+            <span>Renk</span>
+            <input
+              type="color"
+              value={toHex(effect.color)}
+              disabled={disabled}
+              onChange={(e) => onChange({ ...effect, color: fromHex(e.target.value) })}
+            />
+          </label>
+        </>
+      );
+
+    default:
+      // Grayscale, sepia and invert have nothing to configure.
+      return null;
+  }
 }
 
 /** ShareX's image beautifier: padding, corners, shadow and background. */

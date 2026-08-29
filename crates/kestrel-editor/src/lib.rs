@@ -7,15 +7,19 @@
 //! and the export must not be limited to what fits on screen.
 
 pub mod document;
+pub mod effects;
 pub mod font;
 pub mod frame;
 pub mod render;
 pub mod shape;
+pub mod sxie;
 
 pub use document::Document;
+pub use effects::{Chain, Effect};
 pub use frame::{Background, Frame, Shadow};
 pub use render::render;
 pub use shape::{ArrowHead, Color, Point, Rect, Shape, Stroke};
+pub use sxie::{import as import_sxie, Imported};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

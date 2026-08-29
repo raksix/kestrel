@@ -41,6 +41,14 @@ that language exactly, so those files work unmodified.
   textarea so input methods and screen readers keep working
 - Crop, padding, rounded corners, drop shadow, and solid or gradient
   backgrounds — ShareX's crop tool and image beautifier
+- An ordered image effect chain: resize, rotate, flip, auto-crop, brightness,
+  contrast, gamma, saturation, opacity, greyscale, sepia, invert, blur,
+  sharpen, pixelate and border. The order is part of the picture, so the list
+  is reorderable, and the chain always applies to the untouched original —
+  removing an effect really undoes it
+- ShareX `.sxie` effect presets import — best-effort, because unlike `.sxcu`
+  that format is not documented, so the importer names anything it could not
+  map rather than applying a partial preset silently
 - Undo and redo across annotations and framing alike
 - Pin a capture above every other window, with ShareX's keys: drag to move,
   wheel to scale, modifier+wheel for opacity, right click to close
@@ -90,7 +98,7 @@ not capped at screen resolution.
 | 2 | Annotation editor, framing, pin to screen, post-capture card | ✅ |
 | 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
 | 4 | Screen recording, GIF, video tools | 🚧 audio and video tools left |
-| 5 | The remaining tools, effect chain, OCR | 🚧 six tools done |
+| 5 | The remaining tools, effect chain, OCR | 🚧 effects done, six tools done |
 | 6 | CLI, integrations, scrolling capture, 1.0 | ⏳ |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·

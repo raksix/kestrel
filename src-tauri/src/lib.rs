@@ -92,6 +92,8 @@ pub fn run() {
             commands::editor_session,
             commands::close_editor,
             commands::editor_export,
+            commands::editor_set_effects,
+            commands::import_sxie,
             commands::list_destinations,
             commands::import_uploader,
             commands::remove_uploader,

@@ -517,6 +517,44 @@ pub fn close_editor(app: AppHandle) {
     crate::editor::close(&app);
 }
 
+/// Set the editor's image effect chain and restage the result.
+///
+/// `annotationCount` lets Rust refuse an effect that would move the image out
+/// from under existing annotations; see `editor::apply_effects`.
+#[tauri::command]
+pub fn editor_set_effects(
+    app: AppHandle,
+    effects: kestrel_editor::Chain,
+    annotation_count: usize,
+) -> Result<crate::editor::EditorOpened, String> {
+    crate::editor::apply_effects(&app, effects, annotation_count).map_err(err)
+}
+
+/// Read a ShareX `.sxie` effect preset.
+///
+/// The result names any effect Kestrel could not map so the UI can say what was
+/// left out — the format is not documented, and quietly importing a partial
+/// preset would be worse than saying so.
+#[tauri::command]
+pub fn import_sxie(path: String) -> Result<SxiePreset, String> {
+    let text = std::fs::read_to_string(&path).map_err(err)?;
+    let imported = kestrel_editor::import_sxie(&text).map_err(err)?;
+
+    Ok(SxiePreset {
+        name: imported.name,
+        effects: imported.chain,
+        unsupported: imported.unsupported,
+    })
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SxiePreset {
+    pub name: Option<String>,
+    pub effects: kestrel_editor::Chain,
+    pub unsupported: Vec<String>,
+}
+
 /// Flatten the annotations and run the after-capture pipeline over the result,
 /// exactly as a fresh capture would — so the filename pattern, output folder
 /// and clipboard behaviour stay consistent with everything else.
