@@ -21,6 +21,7 @@ tauri-build = { version = "2", features = [] }
 kestrel-core.workspace = true
 kestrel-capture.workspace = true
 kestrel-editor.workspace = true
+kestrel-upload.workspace = true
 
 tauri = { version = "2", features = ["protocol-asset", "macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"

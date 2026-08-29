@@ -46,7 +46,10 @@ impl Context {
 /// `{select:}`, `{inputbox:}` and `{outputbox:}` are interactive by design, so
 /// expansion cannot be a pure function of the response. Callers supply a
 /// prompter; tests supply a scripted one.
-pub trait Prompter {
+///
+/// `Send + Sync` because an upload is awaited across threads, and the prompter
+/// travels with it.
+pub trait Prompter: Send + Sync {
     /// Ask the user to pick one of `options`.
     fn select(&self, options: &[String]) -> Option<String>;
     /// Ask for free text, given a window title and a default.
@@ -529,7 +532,7 @@ mod tests {
     #[test]
     fn functions_nest_inside_arguments() {
         // The documented `{outputbox:Result|{json:...}}` shape.
-        struct Recorder(std::cell::RefCell<Vec<String>>);
+        struct Recorder(std::sync::Mutex<Vec<String>>);
         impl Prompter for Recorder {
             fn select(&self, options: &[String]) -> Option<String> {
                 options.first().cloned()
@@ -538,7 +541,7 @@ mod tests {
                 default.map(str::to_string)
             }
             fn output(&self, _: Option<&str>, message: &str) {
-                self.0.borrow_mut().push(message.to_string());
+                self.0.lock().unwrap().push(message.to_string());
             }
         }
 
@@ -547,7 +550,7 @@ mod tests {
 
         assert_eq!(out, "", "an output box contributes nothing to the URL");
         assert_eq!(
-            recorder.0.borrow().as_slice(),
+            recorder.0.lock().unwrap().as_slice(),
             ["https://example.com/image.png"]
         );
     }

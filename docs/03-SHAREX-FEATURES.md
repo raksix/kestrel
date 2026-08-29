@@ -204,7 +204,7 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | 18 | QR kodu tara | `[ ]` | 5 |
 | 19 | Metin tanı (OCR) | `[ ]` | 5 |
 | 20 | "Yükleme öncesi" penceresini göster | `[ ]` | 3 |
-| 21 | Görseli yükle | `[ ]` | 3 |
+| 21 | Görseli yükle | `[~]` | 3 | custom uploader üzerinden çalışıyor |
 | 22 | Dosyayı yerelden sil | `[ ]` | 3 |
 
 **Kestrel eki:** AirDrop / sistem paylaşımı, betik çalıştırma.
@@ -250,8 +250,9 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | `.sxcu` dosya modeli ve ayrıştırma | `[x]` |
 | İstek hazırlama (URL, parametre, başlık, gövde) | `[x]` |
 | Yanıt ayrıştırma (URL, thumb, silme, hata) | `[x]` |
-| HTTP yürütme | `[ ]` |
-| Dosya ilişkilendirme ve içe aktarma arayüzü | `[ ]` |
+| HTTP yürütme (multipart, form, JSON, XML, binary) | `[x]` |
+| Hedef deposu ve içe aktarma | `[x]` |
+| Dosya ilişkilendirme (`.sxcu` çift tıklama) | `[ ]` |
 | İstek/yanıt inspector'ı | `[ ]` |
 
 **Alanlar:** Name · DestinationType · RequestMethod · RequestURL · Parameters ·

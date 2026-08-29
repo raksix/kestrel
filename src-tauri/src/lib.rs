@@ -10,6 +10,7 @@ mod editor;
 mod overlay;
 mod settings;
 mod shortcuts;
+mod uploads;
 
 use kestrel_core::CaptureMethod;
 use tauri::{
@@ -24,6 +25,8 @@ pub const EVENT_CAPTURE_COMPLETE: &str = "kestrel://capture-complete";
 pub const EVENT_CAPTURE_FAILED: &str = "kestrel://capture-failed";
 /// Emitted after shortcuts are re-registered, with which ones the OS accepted.
 pub const EVENT_SHORTCUTS_CHANGED: &str = "kestrel://shortcuts-changed";
+/// Emitted when an upload finishes, so any window can show the resulting URL.
+pub const EVENT_UPLOAD_COMPLETE: &str = "kestrel://upload-complete";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -44,6 +47,7 @@ pub fn run() {
         .manage(overlay::OverlayState::default())
         .manage(editor::EditorState::default())
         .manage(editor::LastCapture::default())
+        .manage(uploads::DefaultDestination::default())
         .manage(shortcuts::ShortcutRegistry::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_displays,
@@ -79,6 +83,12 @@ pub fn run() {
             commands::editor_session,
             commands::close_editor,
             commands::editor_export,
+            commands::list_destinations,
+            commands::import_uploader,
+            commands::remove_uploader,
+            commands::set_default_destination,
+            commands::upload_last_capture,
+            commands::upload_text,
         ])
         .setup(|app| {
             build_tray(app.handle())?;

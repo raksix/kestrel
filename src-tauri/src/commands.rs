@@ -479,6 +479,128 @@ pub fn editor_export(
     finish_capture(&app, capture, &task_settings(&settings, None))
 }
 
+// ── Destinations ────────────────────────────────────────────────────────
+
+/// Prompts routed to the user. `{select:}`, `{inputbox:}` and `{outputbox:}`
+/// are interactive by design, so an upload can need an answer mid-flight.
+///
+/// Until the prompt windows exist these behave as the unattended prompter
+/// does — first option, supplied default — rather than blocking the upload on
+/// UI that is not built yet.
+struct UiPrompter;
+
+impl kestrel_upload::Prompter for UiPrompter {
+    fn select(&self, options: &[String]) -> Option<String> {
+        options.first().cloned()
+    }
+    fn input(&self, _title: Option<&str>, default: Option<&str>) -> Option<String> {
+        default.map(str::to_string)
+    }
+    fn output(&self, title: Option<&str>, message: &str) {
+        tracing::info!(title = title.unwrap_or("output"), %message, "uploader output");
+    }
+}
+
+#[tauri::command]
+pub fn list_destinations() -> Result<Vec<crate::uploads::Destination>, String> {
+    crate::uploads::list().map_err(err)
+}
+
+/// Import a `.sxcu` file. Validated before it is stored, so a broken uploader
+/// never reaches the destination list.
+#[tauri::command]
+pub fn import_uploader(path: String) -> Result<crate::uploads::Destination, String> {
+    crate::uploads::import(std::path::Path::new(&path)).map_err(err)
+}
+
+#[tauri::command]
+pub fn remove_uploader(id: String) -> Result<Vec<crate::uploads::Destination>, String> {
+    crate::uploads::remove(&id).map_err(err)?;
+    crate::uploads::list().map_err(err)
+}
+
+#[tauri::command]
+pub fn set_default_destination(app: AppHandle, id: Option<String>) {
+    app.state::<crate::uploads::DefaultDestination>().set(id);
+}
+
+/// Upload the most recent capture.
+///
+/// The bytes are encoded here rather than read back from disk: a workflow that
+/// does not save to a file still has something to upload, and re-reading would
+/// pick up whatever the user has since edited.
+#[tauri::command]
+pub async fn upload_last_capture(
+    app: AppHandle,
+    destination: Option<String>,
+) -> Result<crate::uploads::Uploaded, String> {
+    let image = app
+        .state::<crate::editor::LastCapture>()
+        .get()
+        .ok_or("Yüklenecek bir yakalama yok.")?;
+
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image
+        .write_to(&mut bytes, image::ImageFormat::Png)
+        .map_err(err)?;
+
+    let settings = app.state::<SettingsState>().snapshot();
+    let filename = {
+        let ctx = NameContext {
+            width: Some(image.width()),
+            height: Some(image.height()),
+            ..Default::default()
+        };
+        format!(
+            "{}.png",
+            name_pattern::expand_sanitized(&settings.defaults.filename_pattern, &ctx)
+        )
+    };
+
+    let id = match destination {
+        Some(id) => id,
+        None => app
+            .state::<crate::uploads::DefaultDestination>()
+            .resolve()
+            .map_err(err)?,
+    };
+
+    let payload = kestrel_upload::Payload::File {
+        bytes: bytes.into_inner(),
+        filename,
+        mime: "image/png".to_string(),
+    };
+
+    let uploaded = crate::uploads::upload(&id, payload, &UiPrompter)
+        .await
+        .map_err(err)?;
+
+    let _ = app.emit(crate::EVENT_UPLOAD_COMPLETE, uploaded.clone());
+    Ok(uploaded)
+}
+
+#[tauri::command]
+pub async fn upload_text(
+    app: AppHandle,
+    text: String,
+    destination: Option<String>,
+) -> Result<crate::uploads::Uploaded, String> {
+    let id = match destination {
+        Some(id) => id,
+        None => app
+            .state::<crate::uploads::DefaultDestination>()
+            .resolve()
+            .map_err(err)?,
+    };
+
+    let uploaded = crate::uploads::upload(&id, kestrel_upload::Payload::Text(text), &UiPrompter)
+        .await
+        .map_err(err)?;
+
+    let _ = app.emit(crate::EVENT_UPLOAD_COMPLETE, uploaded.clone());
+    Ok(uploaded)
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────
 
 /// Run a workflow by id. Interactive methods open their own UI; direct ones

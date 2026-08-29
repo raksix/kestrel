@@ -19,3 +19,8 @@ regex = "1"
 serde_json_path = "0.7"
 sxd-document = "0.3"
 sxd-xpath = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "charset", "http2"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+wiremock = "0.6"
