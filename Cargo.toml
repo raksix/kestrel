@@ -6,6 +6,7 @@ members = [
     "crates/kestrel-capture",
     "crates/kestrel-editor",
     "crates/kestrel-record",
+    "crates/kestrel-tools",
     "crates/kestrel-upload",
 ]
 
@@ -22,6 +23,7 @@ kestrel-core = { path = "crates/kestrel-core" }
 kestrel-capture = { path = "crates/kestrel-capture" }
 kestrel-editor = { path = "crates/kestrel-editor" }
 kestrel-record = { path = "crates/kestrel-record" }
+kestrel-tools = { path = "crates/kestrel-tools" }
 kestrel-upload = { path = "crates/kestrel-upload" }
 
 serde = { version = "1", features = ["derive"] }

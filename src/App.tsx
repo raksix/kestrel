@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Destinations from "./features/destinations/Destinations";
 import Library from "./features/library/Library";
+import Tools from "./features/tools/Tools";
 import PermissionGate from "./features/settings/PermissionGate";
 import ShortcutSettings from "./features/settings/ShortcutSettings";
 import { openEditor } from "./lib/editorTypes";
@@ -21,13 +22,14 @@ import {
   type Workflow,
 } from "./lib/ipc";
 
-type Section = "capture" | "shortcuts" | "library" | "destinations";
+type Section = "capture" | "shortcuts" | "library" | "destinations" | "tools";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "capture", label: "Yakala" },
   { id: "shortcuts", label: "Kısayollar" },
   { id: "library", label: "Kütüphane" },
   { id: "destinations", label: "Hedefler" },
+  { id: "tools", label: "Araçlar" },
 ];
 
 /** Human wording for each capture method, used as tile subtitles. */
@@ -182,6 +184,7 @@ export default function App() {
             )}
             {section === "library" && <Library />}
             {section === "destinations" && <Destinations />}
+            {section === "tools" && <Tools />}
           </div>
         </div>
       </main>

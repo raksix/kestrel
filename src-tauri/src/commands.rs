@@ -85,6 +85,17 @@ fn finish_capture(
     // editor must not lose the capture, which is already saved by this point.
     if settings
         .after_capture
+        .contains(&kestrel_core::model::AfterCaptureTask::ScanQrCode)
+    {
+        let found = kestrel_tools::decode(&image);
+        if !found.is_empty() {
+            tracing::info!(count = found.len(), "QR codes found in the capture");
+            let _ = app.emit(crate::EVENT_QR_FOUND, found);
+        }
+    }
+
+    if settings
+        .after_capture
         .contains(&kestrel_core::model::AfterCaptureTask::PinToScreen)
     {
         if let Err(e) = crate::pin::pin(app, image.clone()) {
@@ -830,6 +841,61 @@ pub fn set_recording_paused(
         .map_err(err)?;
     let _ = app.emit(crate::EVENT_RECORDING_CHANGED, status.clone());
     Ok(status)
+}
+
+// ── Tools ───────────────────────────────────────────────────────────────
+
+/// Read any QR codes out of the most recent capture.
+///
+/// An empty list is a normal answer — most screenshots have no QR code in them
+/// — so this does not treat "found nothing" as a failure.
+#[tauri::command]
+pub fn scan_qr_code(app: AppHandle) -> Result<Vec<kestrel_tools::Decoded>, String> {
+    let image = app
+        .state::<crate::editor::LastCapture>()
+        .get()
+        .ok_or("Taranacak bir yakalama yok.")?;
+    Ok(kestrel_tools::decode(&image))
+}
+
+/// Render text as a QR code, returned as a data URL for immediate display.
+#[tauri::command]
+pub fn generate_qr_code(text: String, module_size: Option<u32>) -> Result<String, String> {
+    let image = kestrel_tools::encode(&text, module_size.unwrap_or(8)).map_err(err)?;
+    capture_service::encode_preview(&image).map_err(err)
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileHashes {
+    pub algorithm: String,
+    pub digest: String,
+}
+
+#[tauri::command]
+pub fn hash_file(path: String) -> Result<Vec<FileHashes>, String> {
+    let results = kestrel_tools::hash_file_all(std::path::Path::new(&path)).map_err(err)?;
+    Ok(results
+        .into_iter()
+        .map(|(algorithm, digest)| FileHashes {
+            algorithm: algorithm.name().to_string(),
+            digest,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn compare_hash(expected: String, actual: String) -> bool {
+    kestrel_tools::hash::matches(&expected, &actual)
+}
+
+#[tauri::command]
+pub fn analyze_last_capture(app: AppHandle) -> Result<kestrel_tools::Analysis, String> {
+    let image = app
+        .state::<crate::editor::LastCapture>()
+        .get()
+        .ok_or("İncelenecek bir yakalama yok.")?;
+    Ok(kestrel_tools::analyze(&image))
 }
 
 // ── Dispatch ────────────────────────────────────────────────────────────

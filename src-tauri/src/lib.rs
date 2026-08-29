@@ -32,6 +32,8 @@ pub const EVENT_SHORTCUTS_CHANGED: &str = "kestrel://shortcuts-changed";
 pub const EVENT_UPLOAD_COMPLETE: &str = "kestrel://upload-complete";
 /// Emitted whenever recording starts, stops or is paused.
 pub const EVENT_RECORDING_CHANGED: &str = "kestrel://recording-changed";
+/// Emitted when a capture turned out to contain QR codes.
+pub const EVENT_QR_FOUND: &str = "kestrel://qr-found";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -110,6 +112,11 @@ pub fn run() {
             commands::stop_recording,
             commands::cancel_recording,
             commands::set_recording_paused,
+            commands::scan_qr_code,
+            commands::generate_qr_code,
+            commands::hash_file,
+            commands::compare_hash,
+            commands::analyze_last_capture,
         ])
         .setup(|app| {
             build_tray(app.handle())?;

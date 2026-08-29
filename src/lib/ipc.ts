@@ -281,6 +281,39 @@ export const onRecordingChanged = (
 ): Promise<UnlistenFn> =>
   listen<RecordingStatus>(RECORDING_CHANGED, (event) => handler(event.payload));
 
+// ── Tools ───────────────────────────────────────────────────────────────
+
+export interface DecodedQr {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface FileHash {
+  algorithm: string;
+  digest: string;
+}
+
+export interface Analysis {
+  width: number;
+  height: number;
+  uniqueColours: number;
+  uniqueColoursCapped: boolean;
+  hasTransparency: boolean;
+  dominant: string[];
+  averageLuminance: number;
+}
+
+export const scanQrCode = () => invoke<DecodedQr[]>("scan_qr_code");
+export const generateQrCode = (text: string, moduleSize?: number) =>
+  invoke<string>("generate_qr_code", { text, moduleSize });
+export const hashFile = (path: string) => invoke<FileHash[]>("hash_file", { path });
+export const compareHash = (expected: string, actual: string) =>
+  invoke<boolean>("compare_hash", { expected, actual });
+export const analyzeLastCapture = () => invoke<Analysis>("analyze_last_capture");
+
 // ── Events ──────────────────────────────────────────────────────────────
 export const onCaptureComplete = (handler: (output: CaptureOutput) => void): Promise<UnlistenFn> =>
   listen<CaptureOutput>(CAPTURE_COMPLETE, (event) => handler(event.payload));

@@ -58,6 +58,12 @@ that language exactly, so those files work unmodified.
 - Drag a `.sxcu` onto the window to import it
 - Multipart, form-urlencoded, JSON, XML and binary uploads
 
+**Tools**
+- QR codes: generate one, or read every code out of a capture with its position
+- Hash checking with MD5, SHA-1, SHA-256 and SHA-512 in a single pass, and a
+  paste-tolerant comparison
+- Image analysis: size, colour count, transparency and dominant colours
+
 **Organise**
 - Capture history in SQLite, searchable by filename, window title, URL and
   recognised text
@@ -81,7 +87,7 @@ not capped at screen resolution.
 | 2 | Annotation editor, framing, pin to screen, post-capture card | ✅ |
 | 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
 | 4 | Screen recording, GIF, video tools | 🚧 audio and video tools left |
-| 5 | The remaining 24 tools, effect chain, OCR | ⏳ |
+| 5 | The remaining tools, effect chain, OCR | 🚧 six tools done |
 | 6 | CLI, integrations, scrolling capture, 1.0 | ⏳ |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·

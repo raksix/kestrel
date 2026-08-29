@@ -200,8 +200,8 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | 14 | Dosya yolunu panoya kopyala | `[ ]` | 2 |
 | 15 | Klasör yolunu panoya kopyala | `[ ]` | 2 |
 | 16 | Dosya yöneticisinde göster | `[ ]` | 2 |
-| 17 | Görseli analiz et | `[ ]` | 5 |
-| 18 | QR kodu tara | `[ ]` | 5 |
+| 17 | Görseli analiz et | `[x]` | 5 |
+| 18 | QR kodu tara | `[x]` | 5 |
 | 19 | Metin tanı (OCR) | `[ ]` | 5 |
 | 20 | "Yükleme öncesi" penceresini göster | `[ ]` | 3 |
 | 21 | Görseli yükle | `[~]` | 3 | custom uploader üzerinden çalışıyor |
@@ -376,9 +376,9 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | 13 | Küçük resim üretici | `[ ]` | 5 | Toplu |
 | 14 | Video dönüştürücü | `[ ]` | 4 | ffmpeg ön ayarları |
 | 15 | Video küçük resmi | `[ ]` | 4 | Zaman damgalı ızgara |
-| 16 | Görsel analizi | `[ ]` | 5 | Boyut, format, histogram, baskın renkler, EXIF |
+| 16 | Görsel analizi | `[x]` | 5 | Boyut, format, histogram, baskın renkler, EXIF |
 | 17 | OCR | `[ ]` | 5 | `ocrs` + opsiyonel native motor |
-| 18 | QR kod (oluştur + tara) | `[ ]` | 5 | |
+| 18 | QR kod (oluştur + tara) | `[x]` | 5 | konum bilgisiyle |
 | 19 | Hash kontrolü | `[ ]` | 5 | MD5/SHA1/SHA256/SHA512 |
 | 20 | Metadata | `[ ]` | 5 | EXIF/IPTC/XMP görüntüle + temizle |
 | 21 | Dizin indeksleyici | `[ ]` | 5 | HTML/TXT/XML/JSON |
@@ -523,11 +523,11 @@ Tümü faz 6.
 | Overlay | 31 | 11 | 1 | 19 |
 | Editör | 33 | 21 | 2 | 10 |
 | Efektler | ~40 | 0 | 0 | ~40 |
-| After-capture / after-upload | 28 | 7 | 0 | 21 |
+| After-capture / after-upload | 28 | 9 | 0 | 19 |
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
-| Araçlar | 25 | 1 | 0 | 24 |
+| Araçlar | 25 | 6 | 0 | 19 |
 | Workflow / otomasyon | 25 | 7 | 1 | 17 |
 | Geçmiş | 10 | 5 | 2 | 3 |
 | Ayarlar | 10 | 1 | 2 | 7 |
