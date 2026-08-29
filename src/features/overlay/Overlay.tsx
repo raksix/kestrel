@@ -18,7 +18,11 @@ import { drawShapesOnly, setImageReadyHandler } from "../editor/canvas";
 import { imageFromEvent, placeAt } from "../../lib/paste";
 import Magnifier from "./Magnifier";
 import OverlayText from "./OverlayText";
-import OverlayToolbar, { OVERLAY_TOOLS, type OverlayTool } from "./OverlayToolbar";
+import OverlayToolbar, {
+  digitFor,
+  OVERLAY_TOOLS,
+  type OverlayTool,
+} from "./OverlayToolbar";
 import "./overlay.css";
 
 interface OverlayProps {
@@ -442,11 +446,23 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
         return;
       }
 
-      const match = OVERLAY_TOOLS.find((t) => t.key === event.key.toLowerCase());
-      if (match && !mod) {
-        event.preventDefault();
-        setTool(match.id === "select" ? null : match.id);
-        return;
+      if (!mod) {
+        // A digit picks a tool by position and a letter picks it by name. The
+        // digit is checked first because a letter tool could otherwise shadow
+        // one — and because the numbers are the labels people can see.
+        const byDigit = OVERLAY_TOOLS.findIndex(
+          (_, index) => digitFor(index) === event.key,
+        );
+        const match =
+          byDigit >= 0
+            ? OVERLAY_TOOLS[byDigit]
+            : OVERLAY_TOOLS.find((t) => t.key === event.key.toLowerCase());
+
+        if (match) {
+          event.preventDefault();
+          setTool(match.id === "select" ? null : match.id);
+          return;
+        }
       }
 
       if (selection && event.key.startsWith("Arrow")) {

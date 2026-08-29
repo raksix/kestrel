@@ -29,9 +29,13 @@ that language exactly, so those files work unmodified.
 - Full-screen, per-display and window capture on macOS, Windows, X11 and Wayland
 - Region overlay: drag to select, or click a window to snap to it, with a live
   size readout, crosshair and keyboard nudging
-- Annotate on the overlay before capturing, with the editor's full tool set
-  and the same keys: rectangle, ellipse, arrow, line, freehand, text, speech
-  balloon, step numbers, highlight, spotlight, blur and pixelate
+- Annotate on the overlay before capturing, with the editor's full tool set:
+  rectangle, ellipse, arrow, line, freehand, text, speech balloon, step
+  numbers, highlight, spotlight, blur and pixelate. Each tool answers to
+  ShareX's letter *and* to its position, 1–9 then 0, with the digit shown on
+  the icon
+- Eight one-click colours plus a full picker, and four stroke widths as sizes
+  rather than a slider you have to aim at
 - Paste or drop an image straight onto the overlay or the editor. The pixels
   are carried inside the document, not a path, so it survives the source file
   being moved

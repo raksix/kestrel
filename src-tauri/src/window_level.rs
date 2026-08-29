@@ -37,11 +37,24 @@ mod imp {
 
         // SAFETY: `ns_window()` hands back the `NSWindow` backing this
         // `WebviewWindow`, which outlives this call because `window` is
-        // borrowed for it. `setLevel:` is a plain property setter with no
-        // ownership implications.
-        unsafe {
+        // borrowed for it. `setLevel:` and `level` are plain property
+        // accessors with no ownership implications.
+        let applied = unsafe {
             let ns_window: &NSWindow = &*pointer.cast();
             ns_window.setLevel(NSScreenSaverWindowLevel);
+            ns_window.level()
+        };
+
+        // Read it back rather than assuming. This started as a bug report of
+        // "sometimes the Dock still covers it", and a setter that silently
+        // does not stick is exactly the kind of thing that turns into a
+        // report like that instead of a log line.
+        if applied != NSScreenSaverWindowLevel {
+            tracing::warn!(
+                applied,
+                wanted = NSScreenSaverWindowLevel,
+                "the overlay window level did not stick; the Dock may cover it"
+            );
         }
     }
 }

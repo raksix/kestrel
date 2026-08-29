@@ -109,7 +109,7 @@
 .overlay__hint {
   position: absolute;
   left: 50%;
-  bottom: 28px;
+  bottom: 96px;
   transform: translateX(-50%);
   display: flex;
   gap: 16px;
@@ -128,7 +128,10 @@
 .overlay__toolbar {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  /* Clear of the Dock and the Windows taskbar. The overlay is raised above
+     both, but if that ever fails the toolbar must still be usable rather than
+     hidden behind them — which is exactly how this was first reported. */
+  bottom: 96px;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -157,14 +160,39 @@
 }
 
 .overlay__tool {
-  padding: 5px 10px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 9px;
   background: transparent;
   color: rgb(255 255 255 / 0.86);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+  transition: background 90ms ease, color 90ms ease;
+}
+
+/* The digit that also selects this tool. Small and low-contrast: it is a
+   reminder for the second use, not a thing to read on every glance. */
+.overlay__tool-digit {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 9px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: rgb(255 255 255 / 0.4);
+  pointer-events: none;
+}
+
+.overlay__tool[aria-pressed="true"] .overlay__tool-digit {
+  color: rgb(0 0 0 / 0.45);
 }
 
 .overlay__tool:hover {
@@ -183,8 +211,100 @@
 }
 
 .overlay__tool--confirm {
+  gap: 6px;
+  padding: 0 14px;
   background: #1d9e75;
   color: #ffffff;
+  font-weight: 500;
+}
+
+.overlay__tool--confirm:hover {
+  background: #24b485;
+}
+
+/* ── Colour and width ───────────────────────────────────────────────── */
+
+.overlay__swatches,
+.overlay__widths {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.overlay__swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.28);
+  border-radius: 50%;
+  cursor: pointer;
+  /* No transition on the ring: the selected swatch should read instantly,
+     because it is the answer to "what colour am I about to draw in". */
+  box-shadow: none;
+}
+
+.overlay__swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px rgb(20 20 22),
+    0 0 0 4px #ffffff;
+}
+
+/* The native colour input is unstyleable across platforms, so it is hidden
+   behind a swatch that looks like the others and shows the current colour. */
+.overlay__swatch--custom {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: conic-gradient(
+    #ff453a,
+    #ffd60a,
+    #32d74b,
+    #0a84ff,
+    #bf5af2,
+    #ff453a
+  );
+}
+
+.overlay__swatch--custom > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgb(0 0 0 / 0.35);
+}
+
+.overlay__swatch--custom > input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.overlay__width-dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.overlay__width-dot:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.overlay__width-dot[aria-pressed="true"] {
+  background: rgb(255 255 255 / 0.22);
+}
+
+.overlay__width-dot > span {
+  display: block;
+  border-radius: 50%;
+  background: currentColor;
+  color: rgb(255 255 255 / 0.9);
 }
 
 .overlay__toolbar-divider {
@@ -192,20 +312,6 @@
   height: 18px;
   margin: 0 4px;
   background: rgb(255 255 255 / 0.25);
-}
-
-.overlay__color {
-  width: 26px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid rgb(255 255 255 / 0.3);
-  border-radius: 6px;
-  background: none;
-  cursor: pointer;
-}
-
-.overlay__width {
-  width: 80px;
 }
 
 @media (prefers-reduced-transparency: reduce) {

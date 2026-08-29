@@ -117,8 +117,26 @@ fn publish(endpoint: &Endpoint) -> std::io::Result<()> {
 
 /// Remove the endpoint file on shutdown, so the CLI reports "not running"
 /// rather than failing to connect to a port nobody is on.
+///
+/// Only if it is still *ours*. Quitting one instance while another is starting
+/// is an ordinary thing to do — during development it happens constantly — and
+/// an unconditional delete here removes the file the new instance just wrote,
+/// leaving a running app that every command reports as absent. That is what the
+/// pid in the endpoint is for.
 pub fn withdraw() {
-    if let Some(path) = endpoint_path() {
+    let Some(path) = endpoint_path() else {
+        return;
+    };
+
+    let owned_by_us = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Endpoint>(&text).ok())
+        .map(|endpoint| endpoint.pid == std::process::id())
+        // A file we cannot read is not one we can claim, so leave it: a stale
+        // file produces a clear message, a deleted live one does not.
+        .unwrap_or(false);
+
+    if owned_by_us {
         let _ = std::fs::remove_file(path);
     }
 }
