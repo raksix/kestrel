@@ -1,9 +1,8 @@
 /**
  * Typed wrappers around the Rust IPC surface (`src-tauri/src/commands.rs`).
  *
- * These types are hand-written for now; once the surface stabilises they will
- * be generated from the Rust definitions with `ts-rs` so the two halves can
- * never drift apart. See docs/00-PLAN.md §3.
+ * Hand-written for now; once the surface stabilises these will be generated
+ * from the Rust definitions with `ts-rs` so the two halves cannot drift apart.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -23,6 +22,8 @@ export type CaptureMethod =
   | "screen_recording_gif"
   | "scrolling_capture"
   | "auto_capture";
+
+export type PermissionStatus = "granted" | "denied" | "not_required";
 
 export interface Region {
   x: number;
@@ -45,14 +46,17 @@ export interface WindowInfo {
   app_name: string;
   region: Region;
   is_minimized: boolean;
+  z: number;
+  is_focused: boolean;
 }
 
 export interface Capabilities {
-  window_enumeration: boolean;
-  window_capture: boolean;
-  region_capture: boolean;
-  global_shortcuts: boolean;
-  scrolling_capture: boolean;
+  windowEnumeration: boolean;
+  windowCapture: boolean;
+  regionCapture: boolean;
+  globalShortcuts: boolean;
+  scrollingCapture: boolean;
+  screenPermission: PermissionStatus;
 }
 
 export interface CaptureOutput {
@@ -67,7 +71,9 @@ export interface CaptureOutput {
 
 export interface TaskSettings {
   filename_pattern: string;
+  output_directory: string | null;
   quality: number;
+  image_format: string;
 }
 
 export interface Workflow {
@@ -79,28 +85,88 @@ export interface Workflow {
   enabled: boolean;
 }
 
+export interface AppSettings {
+  version: number;
+  workflows: Workflow[];
+  defaults: TaskSettings;
+}
+
+export interface ShortcutReport {
+  workflowId: string;
+  name: string;
+  accelerator: string;
+  registered: boolean;
+  error: string | null;
+}
+
 export const CAPTURE_COMPLETE = "kestrel://capture-complete";
 export const CAPTURE_FAILED = "kestrel://capture-failed";
+export const SHORTCUTS_CHANGED = "kestrel://shortcuts-changed";
 
+// ── Discovery ───────────────────────────────────────────────────────────
 export const listDisplays = () => invoke<DisplayInfo[]>("list_displays");
 export const listWindows = () => invoke<WindowInfo[]>("list_windows");
 export const platformCapabilities = () => invoke<Capabilities>("platform_capabilities");
+
+// ── Permissions ─────────────────────────────────────────────────────────
+export const permissionStatus = () => invoke<PermissionStatus>("permission_status");
+export const requestScreenPermission = () =>
+  invoke<PermissionStatus>("request_screen_permission");
+export const openPermissionSettings = () => invoke<void>("open_permission_settings");
+
+// ── Capture ─────────────────────────────────────────────────────────────
+export const captureFullscreen = () => invoke<CaptureOutput>("capture_fullscreen");
+export const captureDisplay = (id: number) => invoke<CaptureOutput>("capture_display", { id });
+export const captureWindow = (id: number) => invoke<CaptureOutput>("capture_window", { id });
+export const captureActiveWindow = () => invoke<CaptureOutput>("capture_active_window");
+export const windowThumbnail = (id: number) => invoke<string>("window_thumbnail", { id });
+export const displayThumbnail = (id: number) => invoke<string>("display_thumbnail", { id });
+
+// ── Region selection ────────────────────────────────────────────────────
+export const beginRegionCapture = () => invoke<void>("begin_region_capture");
+export const commitRegionCapture = (region: Region) =>
+  invoke<CaptureOutput>("commit_region_capture", { region });
+export const cancelRegionCapture = () => invoke<void>("cancel_region_capture");
+
+// ── Picker ──────────────────────────────────────────────────────────────
+export const openWindowPicker = (tab: "windows" | "displays" = "windows") =>
+  invoke<void>("open_window_picker", { tab });
+export const closeWindowPicker = () => invoke<void>("close_window_picker");
+
+// ── Settings ────────────────────────────────────────────────────────────
+export const getSettings = () => invoke<AppSettings>("get_settings");
 export const listWorkflows = () => invoke<Workflow[]>("list_workflows");
-
-export const capture = (method: CaptureMethod) =>
-  invoke<CaptureOutput>("capture", { method });
-
-export const captureRegion = (region: Region) =>
-  invoke<CaptureOutput>("capture_region", { region });
-
+export const runWorkflow = (id: string) => invoke<CaptureOutput | null>("run_workflow", { id });
+export const setWorkflowShortcut = (id: string, accelerator: string | null) =>
+  invoke<Workflow[]>("set_workflow_shortcut", { id, accelerator });
+export const setWorkflowEnabled = (id: string, enabled: boolean) =>
+  invoke<Workflow[]>("set_workflow_enabled", { id, enabled });
+export const resetShortcuts = () => invoke<Workflow[]>("reset_shortcuts");
+export const shortcutRegistrationReport = () =>
+  invoke<ShortcutReport[]>("shortcut_registration_report");
+export const setFilenamePattern = (pattern: string) =>
+  invoke<AppSettings>("set_filename_pattern", { pattern });
+export const setOutputDirectory = (directory: string | null) =>
+  invoke<AppSettings>("set_output_directory", { directory });
 export const previewFilename = (pattern: string) =>
   invoke<string>("preview_filename", { pattern });
 
+// ── Events ──────────────────────────────────────────────────────────────
 export const onCaptureComplete = (handler: (output: CaptureOutput) => void): Promise<UnlistenFn> =>
   listen<CaptureOutput>(CAPTURE_COMPLETE, (event) => handler(event.payload));
 
 export const onCaptureFailed = (handler: (message: string) => void): Promise<UnlistenFn> =>
   listen<string>(CAPTURE_FAILED, (event) => handler(event.payload));
+
+export const onShortcutsChanged = (
+  handler: (reports: ShortcutReport[]) => void,
+): Promise<UnlistenFn> =>
+  listen<ShortcutReport[]>(SHORTCUTS_CHANGED, (event) => handler(event.payload));
+
+// ── Shortcut formatting ─────────────────────────────────────────────────
+
+export const isMac = () =>
+  typeof navigator !== "undefined" && navigator.userAgent.includes("Mac");
 
 /**
  * Render an accelerator the way the current platform writes it.
@@ -108,9 +174,8 @@ export const onCaptureFailed = (handler: (message: string) => void): Promise<Unl
  */
 export function formatShortcut(accelerator: string | null): string {
   if (!accelerator) return "";
-  const isMac = navigator.userAgent.includes("Mac");
-  if (!isMac) {
-    return accelerator.replace(/CmdOrCtrl|CommandOrControl/g, "Ctrl");
+  if (!isMac()) {
+    return accelerator.replace(/CmdOrCtrl|CommandOrControl/g, "Ctrl").replace(/\+/g, "+");
   }
   return accelerator
     .split("+")
@@ -134,4 +199,64 @@ export function formatShortcut(accelerator: string | null): string {
       }
     })
     .join("");
+}
+
+/**
+ * Turn a keydown into a Tauri accelerator string, or `null` when the user has
+ * only pressed modifiers so far (so a recorder can keep waiting).
+ *
+ * Rejects modifier-less keys: a global shortcut bound to plain `A` would
+ * swallow that letter system-wide.
+ */
+export function acceleratorFromEvent(event: KeyboardEvent): string | null {
+  const parts: string[] = [];
+  if (event.metaKey || event.ctrlKey) parts.push("CmdOrCtrl");
+  if (event.altKey) parts.push("Alt");
+  if (event.shiftKey) parts.push("Shift");
+
+  const key = event.key;
+  const isModifier = ["Meta", "Control", "Alt", "Shift"].includes(key);
+  if (isModifier || parts.length === 0) return null;
+
+  let code: string;
+  if (/^[a-z]$/i.test(key)) {
+    code = key.toUpperCase();
+  } else if (/^[0-9]$/.test(key)) {
+    code = key;
+  } else if (/^F\d{1,2}$/.test(key)) {
+    code = key;
+  } else {
+    const named: Record<string, string> = {
+      " ": "Space",
+      Enter: "Enter",
+      Tab: "Tab",
+      Backspace: "Backspace",
+      Delete: "Delete",
+      ArrowUp: "Up",
+      ArrowDown: "Down",
+      ArrowLeft: "Left",
+      ArrowRight: "Right",
+      Home: "Home",
+      End: "End",
+      PageUp: "PageUp",
+      PageDown: "PageDown",
+      ",": "Comma",
+      ".": "Period",
+      "/": "Slash",
+      ";": "Semicolon",
+      "'": "Quote",
+      "[": "BracketLeft",
+      "]": "BracketRight",
+      "\\": "Backslash",
+      "-": "Minus",
+      "=": "Equal",
+      "`": "Backquote",
+    };
+    const mapped = named[key];
+    if (!mapped) return null;
+    code = mapped;
+  }
+
+  parts.push(code);
+  return parts.join("+");
 }

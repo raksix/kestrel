@@ -1,42 +1,73 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import PermissionGate from "./features/settings/PermissionGate";
+import ShortcutSettings from "./features/settings/ShortcutSettings";
 import {
-  capture,
   formatShortcut,
+  getSettings,
   listWorkflows,
   onCaptureComplete,
   onCaptureFailed,
   platformCapabilities,
   previewFilename,
+  runWorkflow,
+  setFilenamePattern,
   type Capabilities,
   type CaptureOutput,
   type Workflow,
 } from "./lib/ipc";
 
-type Section = "capture" | "workflows" | "library";
+type Section = "capture" | "shortcuts" | "library";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "capture", label: "Yakala" },
-  { id: "workflows", label: "Workflow'lar" },
+  { id: "shortcuts", label: "Kısayollar" },
   { id: "library", label: "Kütüphane" },
 ];
 
-/**
- * Which capability a workflow depends on. Used to disable — and explain —
- * actions the current platform cannot perform, instead of failing on click.
- */
+/** Human wording for each capture method, used as tile subtitles. */
+const METHOD_LABEL: Record<string, string> = {
+  region: "Sürükleyerek bölge seç",
+  region_light: "Sade bölge seçimi",
+  region_transparent: "Şeffaf bölge seçimi",
+  fullscreen: "Tüm ekranlar tek görüntüde",
+  active_monitor: "İmlecin bulunduğu ekran",
+  active_window: "Öndeki pencere, seçmeden",
+  window_menu: "Pencere listesinden seç",
+  monitor_menu: "Ekran listesinden seç",
+  screen_recording: "Video kaydı",
+  screen_recording_gif: "GIF kaydı",
+  scrolling_capture: "Kaydırarak uzun sayfa",
+  last_region: "Son kullanılan bölge",
+  custom_region: "Kayıtlı sabit bölge",
+  auto_capture: "Zamanlayıcıyla otomatik",
+};
+
+/** Features that exist in the model but are not built yet (see docs/00-PLAN.md). */
+const NOT_YET_BUILT = new Set([
+  "screen_recording",
+  "screen_recording_gif",
+  "scrolling_capture",
+  "last_region",
+  "custom_region",
+  "auto_capture",
+]);
+
 function unavailableReason(
   workflow: Workflow,
   capabilities: Capabilities | null,
 ): string | null {
+  if (NOT_YET_BUILT.has(workflow.method)) {
+    return "Henüz hazır değil";
+  }
   if (!capabilities) return null;
+  if (!capabilities.screenPermission || capabilities.screenPermission === "denied") {
+    return "Ekran Kaydı izni gerekiyor";
+  }
   if (
     (workflow.method === "active_window" || workflow.method === "window_menu") &&
-    !capabilities.window_capture
+    !capabilities.windowCapture
   ) {
-    return "Bu oturumda pencere yakalama yok (Wayland pencere listesi vermiyor).";
-  }
-  if (workflow.method === "scrolling_capture" && !capabilities.scrolling_capture) {
-    return "Kaydırmalı yakalama bu platformda henüz desteklenmiyor.";
+    return "Bu oturumda pencere yakalama yok";
   }
   return null;
 }
@@ -49,13 +80,15 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     listWorkflows().then(setWorkflows).catch((e) => setError(String(e)));
     platformCapabilities().then(setCapabilities).catch((e) => setError(String(e)));
   }, []);
 
-  // Captures triggered from the tray or a global shortcut arrive as events,
-  // so the window shows them even though it did not start them.
+  useEffect(refresh, [refresh]);
+
+  // Captures triggered from the tray, a shortcut or the overlay arrive as
+  // events, so this window reflects them even though it did not start them.
   useEffect(() => {
     const unlisteners = [
       onCaptureComplete((output) => {
@@ -73,11 +106,14 @@ export default function App() {
     };
   }, []);
 
-  const runWorkflow = useCallback(async (workflow: Workflow) => {
+  const run = useCallback(async (workflow: Workflow) => {
     setBusy(true);
     setError(null);
     try {
-      setLatest(await capture(workflow.method));
+      // Interactive workflows (overlay, picker) return null and finish later
+      // through the capture-complete event.
+      const output = await runWorkflow(workflow.id);
+      if (output) setLatest(output);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -113,31 +149,35 @@ export default function App() {
 
       <main className="content">
         <header className="toolbar">
-          <h1 className="toolbar__title">
-            {SECTIONS.find((s) => s.id === section)?.label}
-          </h1>
+          <h1 className="toolbar__title">{SECTIONS.find((s) => s.id === section)?.label}</h1>
           <div className="toolbar__spacer" />
           {busy && <span className="muted">Yakalanıyor…</span>}
         </header>
 
         <div className="panel">
-          {error && (
-            <p className="status status--error" role="alert">
-              <span className="dot" aria-hidden="true" />
-              {error}
-            </p>
-          )}
+          <div className="stack">
+            <PermissionGate onGranted={refresh} />
 
-          {section === "capture" && (
-            <CapturePanel
-              workflows={workflows}
-              capabilities={capabilities}
-              busy={busy}
-              onRun={runWorkflow}
-            />
-          )}
-          {section === "workflows" && <WorkflowPanel workflows={workflows} />}
-          {section === "library" && <LibraryPanel latest={latest} />}
+            {error && (
+              <p className="status status--error" role="alert">
+                <span className="dot" aria-hidden="true" />
+                {error}
+              </p>
+            )}
+
+            {section === "capture" && (
+              <CapturePanel
+                workflows={workflows}
+                capabilities={capabilities}
+                busy={busy}
+                onRun={run}
+              />
+            )}
+            {section === "shortcuts" && (
+              <ShortcutSettings workflows={workflows} onWorkflowsChanged={setWorkflows} />
+            )}
+            {section === "library" && <LibraryPanel latest={latest} />}
+          </div>
         </div>
       </main>
 
@@ -180,7 +220,7 @@ function CapturePanel({
                 {workflow.shortcut && (
                   <kbd className="kbd">{formatShortcut(workflow.shortcut)}</kbd>
                 )}
-                <span>{reason ?? workflow.method.replace(/_/g, " ")}</span>
+                <span>{reason ?? METHOD_LABEL[workflow.method] ?? workflow.method}</span>
               </span>
             </button>
           );
@@ -192,12 +232,19 @@ function CapturePanel({
 }
 
 /**
- * The live filename preview from docs/02-DESIGN.md §3.6 — the thing that makes
- * ShareX's `%y-%mo-%d` token vocabulary learnable instead of guesswork.
+ * The live filename preview from docs/02-DESIGN.md §3.6 — what makes ShareX's
+ * `%y-%mo-%d` token vocabulary learnable instead of guesswork.
  */
 function FilenamePlayground() {
   const [pattern, setPattern] = useState("%y-%mo-%d_%h-%mi-%s");
   const [preview, setPreview] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    getSettings()
+      .then((settings) => setPattern(settings.defaults.filename_pattern))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +262,8 @@ function FilenamePlayground() {
     <section className="card">
       <h2 className="card__title">Dosya adı deseni</h2>
       <p className="card__hint">
-        ShareX token'ları birebir desteklenir. Değiştirdikçe sonuç aşağıda güncellenir.
+        ShareX token'ları birebir desteklenir: %y yıl, %mo ay, %d gün, %h saat, %i artan
+        sayı, %ra rastgele karakter, %t pencere başlığı.
       </p>
       <div className="stack" style={{ marginTop: "var(--space-3)" }}>
         <label>
@@ -224,37 +272,29 @@ function FilenamePlayground() {
             className="input input--mono"
             value={pattern}
             spellCheck={false}
-            onChange={(event) => setPattern(event.target.value)}
+            onChange={(event) => {
+              setPattern(event.target.value);
+              setSaved(false);
+            }}
           />
         </label>
-        <p className="mono muted" aria-live="polite">
-          {preview ? `${preview}.png` : "—"}
-        </p>
+        <div className="row">
+          <p className="mono muted" aria-live="polite" style={{ margin: 0, flex: 1 }}>
+            {preview ? `${preview}.png` : "—"}
+          </p>
+          <button
+            type="button"
+            className="button"
+            onClick={async () => {
+              await setFilenamePattern(pattern);
+              setSaved(true);
+            }}
+          >
+            {saved ? "Kaydedildi" : "Kaydet"}
+          </button>
+        </div>
       </div>
     </section>
-  );
-}
-
-function WorkflowPanel({ workflows }: { workflows: Workflow[] }) {
-  return (
-    <div className="stack">
-      {workflows.map((workflow) => (
-        <section key={workflow.id} className="card">
-          <div className="row">
-            <h2 className="card__title" style={{ margin: 0 }}>
-              {workflow.name}
-            </h2>
-            <div className="toolbar__spacer" />
-            {workflow.shortcut && (
-              <kbd className="kbd">{formatShortcut(workflow.shortcut)}</kbd>
-            )}
-          </div>
-          <p className="card__hint">
-            {workflow.method.replace(/_/g, " ")} · {workflow.settings.filename_pattern}
-          </p>
-        </section>
-      ))}
-    </div>
   );
 }
 
@@ -264,7 +304,8 @@ function LibraryPanel({ latest }: { latest: CaptureOutput | null }) {
       <div className="card">
         <h2 className="card__title">Henüz yakalama yok</h2>
         <p className="card__hint">
-          Yakala bölümünden bir işlem seç ya da global kısayolu kullan.
+          Yakala bölümünden bir işlem seç ya da global kısayolu kullan. Kalıcı geçmiş
+          faz 3'te geliyor.
         </p>
       </div>
     );
@@ -287,9 +328,7 @@ function LibraryPanel({ latest }: { latest: CaptureOutput | null }) {
   );
 }
 
-/**
- * The post-capture floating card from docs/02-DESIGN.md §3.3.
- */
+/** The post-capture floating card from docs/02-DESIGN.md §3.3. */
 function CaptureCard({
   output,
   onDismiss,
@@ -333,9 +372,10 @@ function PlatformSummary({ capabilities }: { capabilities: Capabilities | null }
   if (!capabilities) return null;
 
   const rows: [string, boolean][] = [
-    ["Pencere yakalama", capabilities.window_capture],
-    ["Global kısayol", capabilities.global_shortcuts],
-    ["Kaydırmalı yakalama", capabilities.scrolling_capture],
+    ["Ekran izni", capabilities.screenPermission !== "denied"],
+    ["Pencere yakalama", capabilities.windowCapture],
+    ["Global kısayol", capabilities.globalShortcuts],
+    ["Kaydırmalı yakalama", capabilities.scrollingCapture],
   ];
 
   return (

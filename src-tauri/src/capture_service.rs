@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use base64::Engine;
 use chrono::Local;
 use image::{ImageFormat as ImageIoFormat, RgbaImage};
-use kestrel_capture::{Capture, CaptureBackend, Region};
+use kestrel_capture::{Capture, Region};
 use kestrel_core::{
     model::{AfterCaptureTask, ImageFormat, TaskSettings},
     name_pattern::{self, NameContext},
@@ -196,7 +196,7 @@ fn copy_to_clipboard(image: &RgbaImage) -> Result<()> {
         .map_err(|e| ServiceError::Clipboard(e.to_string()))
 }
 
-fn encode_preview(image: &RgbaImage) -> Result<String> {
+pub fn encode_preview(image: &RgbaImage) -> Result<String> {
     let (w, h) = (image.width().max(1), image.height().max(1));
     let scale = (PREVIEW_MAX_EDGE as f32 / w.max(h) as f32).min(1.0);
     let thumb = if scale < 1.0 {
@@ -213,40 +213,6 @@ fn encode_preview(image: &RgbaImage) -> Result<String> {
     thumb.write_to(&mut buffer, ImageIoFormat::Png)?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(buffer.into_inner());
     Ok(format!("data:image/png;base64,{encoded}"))
-}
-
-/// Capture according to a [`kestrel_core::CaptureMethod`], using the display
-/// under the pointer for the "active monitor" variants.
-pub fn capture_for_method(
-    backend: &dyn CaptureBackend,
-    method: kestrel_core::CaptureMethod,
-) -> Result<Capture> {
-    use kestrel_core::CaptureMethod as M;
-    let capture = match method {
-        M::Fullscreen => backend.capture_all_displays()?,
-        M::ActiveMonitor | M::MonitorMenu => {
-            let displays = backend.displays()?;
-            let primary = displays
-                .iter()
-                .find(|d| d.is_primary)
-                .or_else(|| displays.first())
-                .ok_or_else(|| {
-                    kestrel_capture::CaptureError::Backend("no displays available".into())
-                })?;
-            backend.capture_display(primary.id)?
-        }
-        M::ActiveWindow | M::WindowMenu => {
-            let windows = backend.windows()?;
-            let front = windows.first().ok_or_else(|| {
-                kestrel_capture::CaptureError::Backend("no capturable windows".into())
-            })?;
-            backend.capture_window(front.id)?
-        }
-        // Region variants are driven by the overlay, which calls
-        // `capture_region` directly with the user's selection.
-        _ => backend.capture_all_displays()?,
-    };
-    Ok(capture)
 }
 
 #[cfg(test)]

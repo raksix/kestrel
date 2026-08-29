@@ -1,0 +1,93 @@
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.shortcut-row + .shortcut-row {
+  border-block-start: 1px solid var(--border);
+}
+
+.shortcut-row__toggle {
+  display: flex;
+  align-items: center;
+}
+
+.shortcut-row__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.shortcut-row__name {
+  font-weight: 500;
+}
+
+.shortcut-row__warning {
+  font-size: var(--text-xs);
+  color: var(--warning);
+}
+
+.shortcut-key {
+  min-width: 96px;
+  min-height: 28px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.shortcut-key:hover {
+  background: var(--bg-hover);
+}
+
+.shortcut-key--recording {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-family: var(--font-sans);
+}
+
+.shortcut-key--failed {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+/* ── Permission banner ────────────────────────────────────── */
+
+.permission {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.permission--blocking {
+  border-color: var(--warning);
+}
+
+.permission__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
+}

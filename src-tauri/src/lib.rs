@@ -6,17 +6,23 @@
 
 mod capture_service;
 mod commands;
+mod overlay;
+mod settings;
+mod shortcuts;
 
+use kestrel_core::CaptureMethod;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager,
 };
 
-/// Event emitted when a capture finishes, consumed by the post-capture card.
-const EVENT_CAPTURE_COMPLETE: &str = "kestrel://capture-complete";
-/// Event emitted when a capture fails, so the UI can surface the reason.
-const EVENT_CAPTURE_FAILED: &str = "kestrel://capture-failed";
+/// Emitted when a capture finishes, consumed by the post-capture card.
+pub const EVENT_CAPTURE_COMPLETE: &str = "kestrel://capture-complete";
+/// Emitted when a capture fails, so the UI can surface the reason.
+pub const EVENT_CAPTURE_FAILED: &str = "kestrel://capture-failed";
+/// Emitted after shortcuts are re-registered, with which ones the OS accepted.
+pub const EVENT_SHORTCUTS_CHANGED: &str = "kestrel://shortcuts-changed";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -27,48 +33,65 @@ pub fn run() {
         )
         .init();
 
-    let mut builder = tauri::Builder::default()
+    tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init());
-
-    #[cfg(desktop)]
-    {
-        builder = builder.plugin(global_shortcut_plugin());
-    }
-
-    builder
+        .plugin(tauri_plugin_notification::init())
+        .plugin(shortcuts::plugin())
+        .manage(settings::SettingsState::new())
+        .manage(overlay::OverlayState::default())
+        .manage(shortcuts::ShortcutState_::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_displays,
             commands::list_windows,
             commands::platform_capabilities,
-            commands::capture,
-            commands::capture_region,
-            commands::preview_filename,
+            commands::permission_status,
+            commands::request_screen_permission,
+            commands::open_permission_settings,
+            commands::capture_fullscreen,
+            commands::capture_display,
+            commands::capture_window,
+            commands::capture_active_window,
+            commands::window_thumbnail,
+            commands::display_thumbnail,
+            commands::begin_region_capture,
+            commands::commit_region_capture,
+            commands::cancel_region_capture,
+            commands::open_window_picker,
+            commands::close_window_picker,
+            commands::get_settings,
             commands::list_workflows,
+            commands::set_workflow_shortcut,
+            commands::set_workflow_enabled,
+            commands::reset_shortcuts,
+            commands::shortcut_registration_report,
+            commands::set_filename_pattern,
+            commands::set_output_directory,
+            commands::preview_filename,
+            commands::run_workflow,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
-
-            #[cfg(desktop)]
-            register_default_shortcuts(app.handle());
-
+            shortcuts::reregister(app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running Kestrel");
 }
 
-/// Run a capture on a worker thread and report the outcome to the frontend.
-/// Capture can take tens of milliseconds; never block the UI thread with it.
-fn run_capture(app: &AppHandle, method: kestrel_core::CaptureMethod) {
+/// Dispatch a capture off the UI thread and report the outcome by event.
+///
+/// Interactive methods (region overlay, picker) return `None` here — their
+/// result arrives later, when the user commits a selection.
+pub fn run_in_background(app: &AppHandle, method: CaptureMethod) {
     let app = app.clone();
-    std::thread::spawn(move || match commands::capture(method) {
-        Ok(output) => {
+    std::thread::spawn(move || match commands::dispatch_from_app(&app, method) {
+        Ok(Some(output)) => {
             tracing::info!(?method, "capture complete");
             let _ = app.emit(EVENT_CAPTURE_COMPLETE, output);
         }
+        Ok(None) => tracing::debug!(?method, "interactive capture started"),
         Err(err) => {
             tracing::error!(%err, ?method, "capture failed");
             let _ = app.emit(EVENT_CAPTURE_FAILED, err);
@@ -79,8 +102,16 @@ fn run_capture(app: &AppHandle, method: kestrel_core::CaptureMethod) {
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let region = MenuItem::with_id(app, "capture-region", "Bölge yakala", true, None::<&str>)?;
     let fullscreen = MenuItem::with_id(app, "capture-fullscreen", "Tüm ekran", true, None::<&str>)?;
-    let window = MenuItem::with_id(app, "capture-window", "Pencere", true, None::<&str>)?;
-    let library = MenuItem::with_id(app, "open-library", "Kütüphane…", true, None::<&str>)?;
+    let window_menu = MenuItem::with_id(app, "capture-window", "Pencere seç…", true, None::<&str>)?;
+    let active_window = MenuItem::with_id(
+        app,
+        "capture-active-window",
+        "Aktif pencere",
+        true,
+        None::<&str>,
+    )?;
+    let monitor_menu = MenuItem::with_id(app, "capture-monitor", "Ekran seç…", true, None::<&str>)?;
+    let library = MenuItem::with_id(app, "open-library", "Kestrel'i aç…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Kestrel'den çık", true, None::<&str>)?;
 
     let menu = Menu::with_items(
@@ -88,7 +119,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         &[
             &region,
             &fullscreen,
-            &window,
+            &window_menu,
+            &active_window,
+            &monitor_menu,
             &PredefinedMenuItem::separator(app)?,
             &library,
             &PredefinedMenuItem::separator(app)?,
@@ -106,16 +139,15 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .tooltip("Kestrel")
         .menu(&menu)
         .show_menu_on_left_click(true)
-        .on_menu_event(|app, event| {
-            use kestrel_core::CaptureMethod as M;
-            match event.id().as_ref() {
-                "capture-region" => run_capture(app, M::Region),
-                "capture-fullscreen" => run_capture(app, M::Fullscreen),
-                "capture-window" => run_capture(app, M::ActiveWindow),
-                "open-library" => show_main_window(app),
-                "quit" => app.exit(0),
-                other => tracing::warn!(id = other, "unhandled tray menu item"),
-            }
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "capture-region" => run_in_background(app, CaptureMethod::Region),
+            "capture-fullscreen" => run_in_background(app, CaptureMethod::Fullscreen),
+            "capture-window" => run_in_background(app, CaptureMethod::WindowMenu),
+            "capture-active-window" => run_in_background(app, CaptureMethod::ActiveWindow),
+            "capture-monitor" => run_in_background(app, CaptureMethod::MonitorMenu),
+            "open-library" => show_main_window(app),
+            "quit" => app.exit(0),
+            other => tracing::warn!(id = other, "unhandled tray menu item"),
         })
         .build(app)?;
 
@@ -127,49 +159,5 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
-    }
-}
-
-#[cfg(desktop)]
-fn global_shortcut_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
-    use tauri_plugin_global_shortcut::ShortcutState;
-
-    tauri_plugin_global_shortcut::Builder::new()
-        .with_handler(|app, shortcut, event| {
-            // Fire on press only; without this every shortcut captures twice.
-            if event.state() != ShortcutState::Pressed {
-                return;
-            }
-            let accelerator = shortcut.into_string();
-            let Some(workflow) = kestrel_core::default_workflows()
-                .into_iter()
-                .find(|w| w.shortcut.as_deref() == Some(accelerator.as_str()))
-            else {
-                tracing::warn!(%accelerator, "shortcut fired with no matching workflow");
-                return;
-            };
-            run_capture(app, workflow.method);
-        })
-        .build()
-}
-
-#[cfg(desktop)]
-fn register_default_shortcuts(app: &AppHandle) {
-    use tauri_plugin_global_shortcut::GlobalShortcutExt;
-
-    for workflow in kestrel_core::default_workflows() {
-        let Some(accelerator) = workflow.shortcut.as_deref() else {
-            continue;
-        };
-        // A shortcut already owned by another app must not take the whole
-        // startup down — log it so the UI can offer a rebind later.
-        match app.global_shortcut().register(accelerator) {
-            Ok(()) => {
-                tracing::info!(%accelerator, workflow = %workflow.name, "shortcut registered")
-            }
-            Err(err) => {
-                tracing::warn!(%accelerator, %err, "shortcut unavailable, likely taken by another app")
-            }
-        }
     }
 }

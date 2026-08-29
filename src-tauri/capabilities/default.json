@@ -1,8 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions granted to the main Kestrel window",
-  "windows": ["main"],
+  "description": "Permissions granted to the main window, selection overlays and the picker",
+  "windows": [
+    "main",
+    "overlay-*",
+    "picker"
+  ],
   "permissions": [
     "core:default",
     "core:event:default",

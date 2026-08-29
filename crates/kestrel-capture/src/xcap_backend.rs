@@ -45,7 +45,26 @@ impl XcapBackend {
             app_name: window.app_name().unwrap_or_default(),
             region: Region::new(window.x()?, window.y()?, window.width()?, window.height()?),
             is_minimized: window.is_minimized().unwrap_or(false),
+            z: window.z().unwrap_or(0),
+            is_focused: window.is_focused().unwrap_or(false),
         })
+    }
+
+    /// Windows too small or too system-owned to be worth offering the user.
+    /// Without this the picker fills up with 1px helper windows, menu bars and
+    /// Kestrel's own overlays.
+    fn is_pickable(window: &WindowInfo) -> bool {
+        const MIN_EDGE: u32 = 40;
+
+        if window.is_minimized || window.region.width < MIN_EDGE || window.region.height < MIN_EDGE
+        {
+            return false;
+        }
+        if window.app_name.eq_ignore_ascii_case("Kestrel") {
+            return false;
+        }
+        // macOS reports the menu bar and desktop as Window Server windows.
+        !window.app_name.eq_ignore_ascii_case("Window Server")
     }
 
     fn monitor_by_id(id: u32) -> Result<Monitor> {
@@ -70,11 +89,16 @@ impl CaptureBackend for XcapBackend {
     fn windows(&self) -> Result<Vec<WindowInfo>> {
         // A window whose fields cannot be read is skipped rather than failing
         // the whole enumeration — one bad window should not hide the rest.
-        Ok(Window::all()?
+        let mut windows: Vec<WindowInfo> = Window::all()?
             .iter()
             .filter_map(|w| Self::window_info(w).ok())
-            .filter(|w| !w.is_minimized && !w.region.is_empty())
-            .collect())
+            .filter(Self::is_pickable)
+            .collect();
+
+        // Front-most first: that is the order a picker should show them in,
+        // and it makes "active window" mean the top of this list.
+        windows.sort_by(|a, b| b.z.cmp(&a.z));
+        Ok(windows)
     }
 
     fn capture_display(&self, id: u32) -> Result<Capture> {
@@ -188,13 +212,40 @@ impl CaptureBackend for XcapBackend {
         })
     }
 
+    fn freeze(&self) -> Result<crate::FrozenFrames> {
+        let monitors = Monitor::all()?;
+        let mut frames = Vec::with_capacity(monitors.len());
+
+        for monitor in monitors {
+            let Ok(info) = Self::display_info(&monitor) else {
+                continue;
+            };
+            match monitor.capture_image() {
+                Ok(image) => frames.push((info, image)),
+                Err(err) => tracing::warn!(display = info.id, %err, "could not freeze display"),
+            }
+        }
+
+        if frames.is_empty() {
+            return Err(CaptureError::Backend(
+                "no display could be captured — screen recording permission may be missing".into(),
+            ));
+        }
+        Ok(crate::FrozenFrames::new(frames))
+    }
+
     fn capabilities(&self) -> Capabilities {
+        let permission = crate::permissions::status();
+        // Without the OS permission nothing below is truly available, even
+        // though the APIs exist — report it honestly rather than pretending.
+        let usable = permission.is_usable();
         Capabilities {
-            window_enumeration: !is_wayland(),
-            window_capture: !is_wayland(),
-            region_capture: true,
+            window_enumeration: usable && !is_wayland(),
+            window_capture: usable && !is_wayland(),
+            region_capture: usable,
             global_shortcuts: !is_wayland(),
-            scrolling_capture: cfg!(target_os = "windows"),
+            scrolling_capture: usable && cfg!(target_os = "windows"),
+            screen_permission: permission,
         }
     }
 }

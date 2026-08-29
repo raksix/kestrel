@@ -10,9 +10,13 @@
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 
+pub mod frame;
 pub mod geometry;
+pub mod permissions;
 
+pub use frame::FrozenFrames;
 pub use geometry::{Point, Region};
+pub use permissions::PermissionStatus;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CaptureError {
@@ -47,7 +51,7 @@ pub struct DisplayInfo {
     pub is_primary: bool,
 }
 
-/// A capturable top-level window.
+/// A capturable top-level window, ordered front-to-back by the backend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowInfo {
     pub id: u32,
@@ -55,6 +59,9 @@ pub struct WindowInfo {
     pub app_name: String,
     pub region: Region,
     pub is_minimized: bool,
+    /// Stacking order; higher is closer to the front.
+    pub z: i32,
+    pub is_focused: bool,
 }
 
 /// The result of a capture, plus the provenance needed to name the file.
@@ -78,12 +85,17 @@ impl Capture {
 /// What the current platform actually supports. The UI reads this and disables
 /// (with an explanation) anything unavailable — no silent failures.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Capabilities {
     pub window_enumeration: bool,
     pub window_capture: bool,
     pub region_capture: bool,
     pub global_shortcuts: bool,
     pub scrolling_capture: bool,
+    /// Whether the OS has actually let us capture yet. On macOS this is the
+    /// difference between a working app and one that silently returns
+    /// wallpaper.
+    pub screen_permission: PermissionStatus,
 }
 
 pub trait CaptureBackend: Send + Sync {
@@ -96,6 +108,10 @@ pub trait CaptureBackend: Send + Sync {
 
     /// Every display composited into one image, in global coordinates.
     fn capture_all_displays(&self) -> Result<Capture>;
+
+    /// Snapshot every display at once, for the selection overlay to crop from.
+    /// See [`frame`] for why region capture must not re-capture the screen.
+    fn freeze(&self) -> Result<FrozenFrames>;
 }
 
 mod xcap_backend;

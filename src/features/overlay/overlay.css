@@ -1,0 +1,119 @@
+/*
+ * Selection overlay.
+ *
+ * These colours are deliberately fixed rather than themed: the overlay sits on
+ * top of arbitrary screen content, so it must read the same whether the user
+ * is on a white document or a black terminal.
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  background: transparent;
+}
+
+.overlay__dim {
+  position: absolute;
+  background: rgb(0 0 0 / 0.42);
+  pointer-events: none;
+}
+
+.overlay__crosshair {
+  position: absolute;
+  background: rgb(255 255 255 / 0.5);
+  pointer-events: none;
+}
+
+.overlay__crosshair--h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.overlay__crosshair--v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.overlay__selection {
+  position: absolute;
+  pointer-events: none;
+  /* Two rings: a white inner line stays visible on dark content, the dark
+     outer line stays visible on light content. */
+  outline: 1px solid #ffffff;
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.35);
+}
+
+.overlay__selection--snap {
+  outline: 2px solid #4c9aff;
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 0.3);
+}
+
+.overlay__handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  border: 1px solid rgb(0 0 0 / 0.4);
+}
+
+.overlay__handle--nw {
+  left: -5px;
+  top: -5px;
+}
+.overlay__handle--ne {
+  right: -5px;
+  top: -5px;
+}
+.overlay__handle--sw {
+  left: -5px;
+  bottom: -5px;
+}
+.overlay__handle--se {
+  right: -5px;
+  bottom: -5px;
+}
+
+.overlay__badge {
+  position: absolute;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.78);
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.overlay__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: 999px;
+  background: rgb(20 20 22 / 0.72);
+  backdrop-filter: blur(12px);
+  color: rgb(255 255 255 / 0.86);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .overlay__hint {
+    background: rgb(20 20 22);
+    backdrop-filter: none;
+  }
+}

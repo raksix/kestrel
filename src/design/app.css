@@ -27,6 +27,14 @@ body {
   border-radius: var(--radius-sm);
 }
 
+/* The selection overlay lives in a transparent window; any background here
+   would occlude the desktop it is meant to sit on top of. */
+.is-overlay,
+.is-overlay body,
+.is-overlay #root {
+  background: transparent !important;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

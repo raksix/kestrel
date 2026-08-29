@@ -197,7 +197,9 @@ pub fn default_workflows() -> Vec<Workflow> {
             .with_shortcut("CmdOrCtrl+Shift+2"),
         Workflow::new("capture-fullscreen", "Tüm ekran", CaptureMethod::Fullscreen)
             .with_shortcut("CmdOrCtrl+Shift+3"),
-        Workflow::new("capture-window", "Pencere", CaptureMethod::ActiveWindow)
+        // Opens the picker. ShareX calls this "window menu"; it is the one
+        // people actually reach for, so it gets the memorable shortcut.
+        Workflow::new("capture-window", "Pencere seç", CaptureMethod::WindowMenu)
             .with_shortcut("CmdOrCtrl+Shift+4"),
         Workflow::new(
             "record-screen",
@@ -205,6 +207,15 @@ pub fn default_workflows() -> Vec<Workflow> {
             CaptureMethod::ScreenRecording,
         )
         .with_shortcut("CmdOrCtrl+Shift+5"),
+        // No picker: grabs whatever is in front right now.
+        Workflow::new(
+            "capture-active-window",
+            "Aktif pencere",
+            CaptureMethod::ActiveWindow,
+        )
+        .with_shortcut("CmdOrCtrl+Shift+6"),
+        Workflow::new("capture-monitor", "Ekran seç", CaptureMethod::MonitorMenu)
+            .with_shortcut("CmdOrCtrl+Shift+7"),
     ]
 }
 
