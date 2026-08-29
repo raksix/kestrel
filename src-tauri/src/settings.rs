@@ -21,12 +21,17 @@ pub struct AppSettings {
     /// Destination used when a workflow does not name one. Lives here rather
     /// than in memory so the choice survives a restart.
     pub default_destination: Option<String>,
+    /// Watch folder configuration. Persisted so the watcher can restart with
+    /// the app rather than having to be switched on every launch.
+    #[serde(default)]
+    pub watch: crate::watch::WatchSettings,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             version: 1,
+            watch: crate::watch::WatchSettings::default(),
             workflows: default_workflows(),
             defaults: TaskSettings::default(),
             default_destination: None,

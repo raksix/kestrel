@@ -15,6 +15,7 @@ mod record;
 mod settings;
 mod shortcuts;
 mod uploads;
+mod watch;
 
 use kestrel_core::CaptureMethod;
 use tauri::{
@@ -58,6 +59,7 @@ pub fn run() {
         .manage(history::History::open())
         .manage(history::LastEntryId::default())
         .manage(ocr::OcrState::default())
+        .manage(watch::WatchState::default())
         .manage(record::RecordState::default())
         .manage(shortcuts::ShortcutRegistry::default())
         .invoke_handler(tauri::generate_handler![
@@ -129,19 +131,43 @@ pub fn run() {
             commands::pick_color,
             commands::parse_color,
             commands::compare_images,
+            commands::combine_images,
+            commands::split_image,
             commands::convert_video,
             commands::video_thumbnail,
             commands::read_metadata,
             commands::strip_metadata,
             commands::index_directory,
+            commands::watch_status,
+            commands::set_watch,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
             shortcuts::reregister(app.handle());
+            resume_watch(app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running Kestrel");
+}
+
+/// Restart the watch folder if it was on when the app last quit.
+///
+/// Without this the setting would persist but the behaviour would not, which
+/// is the confusing half of both worlds: the toggle reads "on" and nothing
+/// happens.
+fn resume_watch(app: &AppHandle) {
+    let watch = app.state::<settings::SettingsState>().snapshot().watch;
+    if !watch.enabled {
+        return;
+    }
+
+    let Some(directory) = watch.directory else {
+        return;
+    };
+    if let Err(err) = watch::start(app, std::path::Path::new(&directory)) {
+        tracing::warn!(%err, "could not resume the watch folder");
+    }
 }
 
 /// Dispatch a capture off the UI thread and report the outcome by event.

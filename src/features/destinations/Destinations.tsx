@@ -7,7 +7,10 @@ import {
   listDestinations,
   removeUploader,
   setDefaultDestination,
+  setWatch,
+  watchStatus,
   type Destination,
+  type WatchStatus,
 } from "../../lib/ipc";
 import "./destinations.css";
 
@@ -198,5 +201,83 @@ export default function Destinations() {
         </p>
       )}
     </div>
+  );
+}
+
+
+/**
+ * ShareX's watch folder: a directory that uploads whatever lands in it.
+ *
+ * Lives with the destinations because that is what it does — it is an upload
+ * trigger, not a capture method.
+ */
+export function WatchFolder() {
+  const [status, setStatus] = useState<WatchStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    watchStatus().then(setStatus).catch((e) => setError(String(e)));
+  }, []);
+
+  const apply = (enabled: boolean, directory: string | null) =>
+    setWatch(enabled, directory)
+      .then((next) => {
+        setStatus(next);
+        setError(null);
+      })
+      .catch((e) => setError(String(e)));
+
+  const choose = async () => {
+    const chosen = await open({ directory: true });
+    if (chosen && !Array.isArray(chosen)) void apply(true, chosen);
+  };
+
+  return (
+    <section className="card">
+      <h2 className="card__title">İzlenen klasör</h2>
+      <p className="card__hint">
+        Seçilen klasöre düşen dosyalar otomatik yüklenir. Kestrel dışında
+        üretilen görüntüler için — oyunun ekran görüntüsü tuşu, bir kaydedici,
+        bir tarayıcı.
+      </p>
+      <p className="card__hint">
+        İzleme başladığında klasörde olanlara dokunulmaz; sadece sonradan
+        gelenler yüklenir. Bir dosya, boyutu iki ölçümde aynı kalana kadar
+        beklenir — yarım yazılmış bir dosyayı yüklemek bozuk bir bağlantı
+        üretir.
+      </p>
+
+      {status?.running ? (
+        <>
+          <p className="card__hint">
+            İzleniyor: <code>{status.directory}</code>
+            {status.handled > 0 && ` — ${status.handled} dosya yüklendi`}
+          </p>
+          <div className="row">
+            <button type="button" className="button" onClick={choose}>
+              Klasörü değiştir…
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => void apply(false, status.directory)}
+            >
+              Durdur
+            </button>
+          </div>
+        </>
+      ) : (
+        <button type="button" className="button" onClick={choose}>
+          Klasör seç ve izlemeye başla…
+        </button>
+      )}
+
+      {error && (
+        <p className="status status--error" role="alert">
+          <span className="dot" aria-hidden="true" />
+          {error}
+        </p>
+      )}
+    </section>
   );
 }

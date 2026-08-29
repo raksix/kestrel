@@ -255,7 +255,7 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | URL'den yükle (indir → yükle) | `[ ]` | 4 |
 | Sürükle-bırak yükleme | `[ ]` | 3 |
 | URL kısalt | `[ ]` | 4 |
-| İzleme klasörü (watch folder) | `[ ]` | 6 |
+| İzleme klasörü (watch folder) | `[x]` | 6 |
 
 ---
 
@@ -391,8 +391,8 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | 8 | Görsel görüntüleyici | `[ ]` | 5 | |
 | 9 | Arka plan kaldırıcı | `[ ]` | 5 | ONNX modeli, uygulama içi indirme |
 | 10 | Görsel karşılaştırıcı | `[x]` | 5 | Yüzde + sınır dikdörtgeni + fark görseli; yan yana/geçiş kaldı |
-| 11 | Görsel birleştirici | `[ ]` | 5 | Dikey / yatay / ızgara |
-| 12 | Görsel bölücü | `[ ]` | 5 | Izgaraya böl |
+| 11 | Görsel birleştirici | `[x]` | 5 | Dikey / yatay, boşluklu |
+| 12 | Görsel bölücü | `[x]` | 5 | Izgaraya böl |
 | 13 | Küçük resim üretici | `[x]` | 5 | Tek kare; toplu üretim kaldı |
 | 14 | Video dönüştürücü | `[x]` | 4 | MP4/WebM/MKV/GIF/MP3, ölçek, FPS, ses ayırma |
 | 15 | Video küçük resmi | `[x]` | 4 | Tek kare; ızgara kaldı |
@@ -555,7 +555,7 @@ duyuruyor.
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
-| Araçlar | 25 | 13 | 0 | 12 |
+| Araçlar | 25 | 15 | 0 | 10 |
 | Workflow / otomasyon | 25 | 7 | 1 | 17 |
 | Geçmiş | 10 | 5 | 2 | 3 |
 | Ayarlar | 10 | 1 | 2 | 7 |

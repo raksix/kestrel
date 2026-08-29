@@ -428,6 +428,29 @@ export interface ImageComparison {
 export const compareImages = (first: string, second: string, tolerance?: number) =>
   invoke<ImageComparison>("compare_images", { first, second, tolerance });
 
+// ── Watch folder ────────────────────────────────────────────────────────
+
+export interface WatchStatus {
+  running: boolean;
+  directory: string | null;
+  /** Files handled since the watcher started, so the UI can show it is alive. */
+  handled: number;
+}
+
+export const watchStatus = () => invoke<WatchStatus>("watch_status");
+export const setWatch = (enabled: boolean, directory: string | null) =>
+  invoke<WatchStatus>("set_watch", { enabled, directory });
+
+// ── Image combiner and splitter ─────────────────────────────────────────
+
+/** Returns the path written, beside the first input. */
+export const combineImages = (paths: string[], vertical: boolean, spacing?: number) =>
+  invoke<string>("combine_images", { paths, vertical, spacing });
+
+/** Returns one path per tile, in reading order. */
+export const splitImage = (path: string, columns: number, rows: number) =>
+  invoke<string[]>("split_image", { path, columns, rows });
+
 export const ocrStatus = () => invoke<OcrModelStatus>("ocr_status");
 export const ocrInstall = () => invoke<OcrModelStatus>("ocr_install");
 export const ocrLastCapture = () => invoke<Recognised>("ocr_last_capture");

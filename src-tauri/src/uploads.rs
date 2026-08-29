@@ -177,6 +177,72 @@ pub struct Uploaded {
     pub destination: String,
 }
 
+/// Upload a file from disk to the default destination.
+///
+/// Used by the watch folder, where there is no capture in memory — only a path
+/// that appeared. The MIME type is guessed from the extension because that is
+/// all the information there is; an uploader that cares will reject a wrong
+/// guess, which is a better outcome than refusing to send anything.
+pub async fn upload_path(
+    app: &tauri::AppHandle,
+    path: &Path,
+    prompter: &dyn Prompter,
+) -> Result<Uploaded> {
+    use tauri::Manager;
+
+    let bytes = std::fs::read(path)?;
+    let filename = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "upload".to_string());
+
+    let configured = app
+        .state::<crate::settings::SettingsState>()
+        .snapshot()
+        .default_destination
+        .clone();
+    let destination = resolve_destination(configured)?;
+
+    let payload = if is_text(path) {
+        Payload::Text(String::from_utf8_lossy(&bytes).into_owned())
+    } else {
+        Payload::File {
+            bytes,
+            mime: mime_for(path).to_string(),
+            filename,
+        }
+    };
+
+    upload(&destination, payload, prompter).await
+}
+
+fn is_text(path: &Path) -> bool {
+    matches!(extension(path).as_deref(), Some("txt") | Some("md"))
+}
+
+fn extension(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+}
+
+/// A MIME type for the extensions the watch folder accepts.
+fn mime_for(path: &Path) -> &'static str {
+    match extension(path).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("bmp") => "image/bmp",
+        Some("mp4") => "video/mp4",
+        Some("webm") => "video/webm",
+        Some("mkv") => "video/x-matroska",
+        Some("txt") => "text/plain",
+        // Not a lie so much as an admission: this is bytes of unknown kind.
+        _ => "application/octet-stream",
+    }
+}
+
 /// Upload a payload to one destination.
 pub async fn upload(
     destination_id: &str,

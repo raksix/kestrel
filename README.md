@@ -68,6 +68,10 @@ that language exactly, so those files work unmodified.
   functions, every body type, every request method
 - Drag a `.sxcu` onto the window to import it
 - Multipart, form-urlencoded, JSON, XML and binary uploads
+- Watch folder: a directory that uploads whatever lands in it. Files present
+  when watching starts are left alone, and a file has to hold the same size
+  across two polls before it is touched — uploading a half-written PNG
+  produces a corrupt link that looks like a Kestrel bug
 
 **Tools**
 - QR codes: generate one, or read every code out of a capture with its position
@@ -77,6 +81,9 @@ that language exactly, so those files work unmodified.
 - Metadata viewer that flags what identifies a person, place or device, and a
   stripper that writes a clean copy rather than touching the original
 - Directory indexing to HTML, text, JSON or XML
+- Combine images into one strip, or split one into a grid — different sizes
+  are aligned rather than stretched, because a stretched screenshot is
+  unreadable
 - Colour picker: read a pixel from a capture — or an area average, for
   anti-aliased text — in hex, RGB, HSL, HSV and CMYK at once
 - Image comparer: how much differs, where it differs, and a diff picture with
@@ -106,10 +113,10 @@ not capped at screen resolution.
 | 0 | Project shell, design system, CI, settings, tray | ✅ |
 | 1 | Capture backends, region overlay, shortcuts | ✅ |
 | 2 | Annotation editor, framing, pin to screen, post-capture card | ✅ |
-| 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
+| 3 | Uploaders, `.sxcu` engine, history, destinations | ✅ |
 | 4 | Screen recording, GIF, video tools | 🚧 audio capture left |
-| 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, eleven tools done |
-| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 CLI tools done |
+| 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, thirteen tools done |
+| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 CLI and watch folder done |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·
 [`docs/01-FEATURE-PARITY.md`](docs/01-FEATURE-PARITY.md) ·

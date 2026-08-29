@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   analyzeLastCapture,
   compareHash,
+  combineImages,
   compareImages,
   convertVideo,
   defaultConvertSettings,
@@ -14,6 +15,7 @@ import {
   parseColor,
   pickColor,
   scanQrCode,
+  splitImage,
   videoThumbnail,
   type Analysis,
   type DecodedQr,
@@ -33,6 +35,7 @@ export default function Tools() {
       <QrTool />
       <ColorTool />
       <CompareTool />
+      <CombineTool />
       <VideoTool />
       <OcrTool />
       <HashTool />
@@ -828,6 +831,142 @@ function VideoTool() {
 
       {error && (
         <p className="status status--error" role="alert" style={{ whiteSpace: "pre-line" }}>
+          <span className="dot" aria-hidden="true" />
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+
+/** ShareX's image combiner and splitter. */
+function CombineTool() {
+  const [paths, setPaths] = useState<string[]>([]);
+  const [vertical, setVertical] = useState(true);
+  const [spacing, setSpacing] = useState(0);
+  const [grid, setGrid] = useState({ columns: 2, rows: 2 });
+  const [result, setResult] = useState<string[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = async () => {
+    const chosen = await open({
+      multiple: true,
+      filters: [{ name: "Görsel", extensions: ["png", "jpg", "jpeg", "webp", "bmp"] }],
+    });
+    if (!chosen) return;
+    setPaths(Array.isArray(chosen) ? chosen : [chosen]);
+    setResult(null);
+  };
+
+  const run = async (task: () => Promise<string[]>) => {
+    try {
+      setResult(await task());
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+      setResult(null);
+    }
+  };
+
+  const name = (path: string) => path.split(/[\\/]/).pop();
+
+  return (
+    <section className="card">
+      <h2 className="card__title">Görsel birleştir / böl</h2>
+      <p className="card__hint">
+        Birden çok görseli alt alta ya da yan yana birleştir, ya da tek görseli
+        ızgaraya böl. Farklı boyuttakiler esnetilmez — başa hizalanır, boşluk
+        saydam kalır; esnetilmiş bir ekran görüntüsü okunmaz olur.
+      </p>
+
+      <button type="button" className="button" onClick={choose}>
+        {paths.length > 0 ? `${paths.length} görsel seçildi` : "Görsel seç…"}
+      </button>
+      {paths.length > 0 && (
+        <p className="card__hint">{paths.map(name).join(", ")}</p>
+      )}
+
+      <div className="tools__row">
+        <label className="tools__row">
+          <input
+            type="checkbox"
+            checked={vertical}
+            onChange={(e) => setVertical(e.target.checked)}
+          />
+          <span className="tools__label">Alt alta</span>
+        </label>
+        <label className="tools__row">
+          <span className="tools__label">Boşluk</span>
+          <input
+            type="number"
+            className="input"
+            min={0}
+            max={200}
+            value={spacing}
+            onChange={(e) => setSpacing(Math.max(0, Number(e.target.value)))}
+          />
+        </label>
+        <button
+          type="button"
+          className="button button--primary"
+          disabled={paths.length < 2}
+          onClick={() =>
+            run(async () => [await combineImages(paths, vertical, spacing)])
+          }
+        >
+          Birleştir
+        </button>
+      </div>
+
+      <div className="tools__row">
+        <label className="tools__row">
+          <span className="tools__label">Sütun</span>
+          <input
+            type="number"
+            className="input"
+            min={1}
+            max={20}
+            value={grid.columns}
+            onChange={(e) =>
+              setGrid({ ...grid, columns: Math.max(1, Number(e.target.value)) })
+            }
+          />
+        </label>
+        <label className="tools__row">
+          <span className="tools__label">Satır</span>
+          <input
+            type="number"
+            className="input"
+            min={1}
+            max={20}
+            value={grid.rows}
+            onChange={(e) => setGrid({ ...grid, rows: Math.max(1, Number(e.target.value)) })}
+          />
+        </label>
+        <button
+          type="button"
+          className="button"
+          disabled={paths.length !== 1}
+          onClick={() => run(() => splitImage(paths[0], grid.columns, grid.rows))}
+          title={paths.length === 1 ? undefined : "Bölmek için tek görsel seç"}
+        >
+          Böl
+        </button>
+      </div>
+
+      {result && (
+        <ul className="tools__results">
+          {result.map((path) => (
+            <li key={path}>
+              <code className="tools__path">{path}</code>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {error && (
+        <p className="status status--error" role="alert">
           <span className="dot" aria-hidden="true" />
           {error}
         </p>

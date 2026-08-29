@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Destinations from "./features/destinations/Destinations";
+import Destinations, { WatchFolder } from "./features/destinations/Destinations";
 import Library from "./features/library/Library";
 import Tools from "./features/tools/Tools";
 import PermissionGate from "./features/settings/PermissionGate";
@@ -197,7 +197,12 @@ export default function App() {
               </>
             )}
             {section === "library" && <Library />}
-            {section === "destinations" && <Destinations />}
+            {section === "destinations" && (
+              <>
+                <Destinations />
+                <WatchFolder />
+              </>
+            )}
             {section === "tools" && <Tools />}
           </div>
         </div>

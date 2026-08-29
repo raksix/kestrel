@@ -755,7 +755,11 @@ pub fn editor_export(
 /// Until the prompt windows exist these behave as the unattended prompter
 /// does — first option, supplied default — rather than blocking the upload on
 /// UI that is not built yet.
-struct UiPrompter;
+pub struct UiPrompter;
+
+/// The shared instance, so background paths (the watch folder) use exactly the
+/// same answers an interactive upload would.
+pub const UNATTENDED: UiPrompter = UiPrompter;
 
 impl kestrel_upload::Prompter for UiPrompter {
     fn select(&self, options: &[String]) -> Option<String> {
@@ -1454,4 +1458,103 @@ pub fn set_tasks(
         .map_err(err)?;
 
     Ok(settings.snapshot())
+}
+
+// ── Image combiner and splitter ─────────────────────────────────────────
+
+/// Stack images into one, as ShareX's image combiner.
+///
+/// The result is written beside the first input. Different sizes are aligned to
+/// the start with transparent gaps rather than stretched — a stretched
+/// screenshot is unreadable, which defeats the point of combining them.
+#[tauri::command]
+pub fn combine_images(
+    paths: Vec<String>,
+    vertical: bool,
+    spacing: Option<u32>,
+) -> Result<String, String> {
+    if paths.len() < 2 {
+        return Err("Birleştirmek için en az iki görsel gerek.".to_string());
+    }
+
+    let images = paths
+        .iter()
+        .map(|path| {
+            image::open(path)
+                .map(|image| image.to_rgba8())
+                .map_err(|e| format!("{path}: {e}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let direction = if vertical {
+        kestrel_tools::Direction::Vertical
+    } else {
+        kestrel_tools::Direction::Horizontal
+    };
+    let combined = kestrel_tools::combine(&images, direction, spacing.unwrap_or(0))
+        .ok_or("Birleştirilecek görsel yok.")?;
+
+    let first = std::path::Path::new(&paths[0]);
+    let destination = first.with_file_name(format!(
+        "{}-combined.png",
+        first.file_stem().unwrap_or_default().to_string_lossy()
+    ));
+    combined.save(&destination).map_err(err)?;
+
+    Ok(destination.to_string_lossy().into_owned())
+}
+
+/// Cut an image into a grid, as ShareX's image splitter.
+#[tauri::command]
+pub fn split_image(path: String, columns: u32, rows: u32) -> Result<Vec<String>, String> {
+    let image = image::open(&path).map_err(err)?.to_rgba8();
+    let source = std::path::Path::new(&path);
+    let stem = source.file_stem().unwrap_or_default().to_string_lossy();
+
+    kestrel_tools::split(&image, columns, rows)
+        .into_iter()
+        .enumerate()
+        .map(|(index, tile)| {
+            let destination = source.with_file_name(format!("{stem}-{}.png", index + 1));
+            tile.save(&destination).map_err(err)?;
+            Ok(destination.to_string_lossy().into_owned())
+        })
+        .collect()
+}
+
+// ── Watch folder ────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn watch_status(app: AppHandle) -> crate::watch::WatchStatus {
+    app.state::<crate::watch::WatchState>().status()
+}
+
+/// Start or stop watching a folder, remembering the choice.
+///
+/// The setting is written before the watcher starts, so a directory that turns
+/// out to be unwatchable still leaves the app in a state the user can see and
+/// correct rather than one that silently forgets what they picked.
+#[tauri::command]
+pub fn set_watch(
+    app: AppHandle,
+    enabled: bool,
+    directory: Option<String>,
+    settings: State<'_, SettingsState>,
+) -> Result<crate::watch::WatchStatus, String> {
+    settings
+        .update(|state| {
+            state.watch.enabled = enabled;
+            state.watch.directory = directory.clone();
+            Ok(())
+        })
+        .map_err(err)?;
+
+    let state = app.state::<crate::watch::WatchState>();
+    if !enabled {
+        state.stop();
+        return Ok(state.status());
+    }
+
+    let directory = directory.ok_or_else(|| crate::watch::WatchError::NoDirectory.to_string())?;
+    crate::watch::start(&app, std::path::Path::new(&directory)).map_err(err)
 }
