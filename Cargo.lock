@@ -79,7 +79,7 @@ dependencies = [
  "objc2-foundation",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -2351,6 +2351,18 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "rand 0.8.8",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tracing",
+]
+
+[[package]]
+name = "kestrel-editor"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "kestrel-capture",
  "serde",
  "serde_json",
  "thiserror 2.0.20",

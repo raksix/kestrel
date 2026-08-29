@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["src-tauri", "crates/kestrel-core", "crates/kestrel-capture"]
+members = [
+    "src-tauri",
+    "crates/kestrel-core",
+    "crates/kestrel-capture",
+    "crates/kestrel-editor",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,6 +18,7 @@ authors = ["Kestrel contributors"]
 [workspace.dependencies]
 kestrel-core = { path = "crates/kestrel-core" }
 kestrel-capture = { path = "crates/kestrel-capture" }
+kestrel-editor = { path = "crates/kestrel-editor" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

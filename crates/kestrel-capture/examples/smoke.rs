@@ -47,7 +47,11 @@ fn main() {
 
     let t = std::time::Instant::now();
     match b.freeze() {
-        Ok(f) => println!("freeze: {} display(s) in {:?}", f.displays().len(), t.elapsed()),
+        Ok(f) => println!(
+            "freeze: {} display(s) in {:?}",
+            f.displays().len(),
+            t.elapsed()
+        ),
         Err(e) => println!("freeze FAILED: {e}"),
     }
 }
