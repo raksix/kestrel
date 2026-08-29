@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import Editor from "./features/editor/Editor";
 import Overlay from "./features/overlay/Overlay";
 import Picker from "./features/picker/Picker";
 import "./design/tokens.css";
@@ -30,6 +31,8 @@ function root() {
           size={{ width: number("w", window.innerWidth), height: number("h", window.innerHeight) }}
         />
       );
+    case "editor":
+      return <Editor />;
     case "picker":
       return <Picker initialTab={params.get("tab") === "displays" ? "displays" : "windows"} />;
     default:

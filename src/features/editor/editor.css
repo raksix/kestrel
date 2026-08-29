@@ -1,0 +1,153 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-canvas);
+}
+
+.editor--empty {
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+}
+
+.editor__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--border);
+  background: var(--bg-surface);
+  flex-wrap: wrap;
+}
+
+.editor__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+.editor__field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.editor__field-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.editor__field input[type="color"] {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.editor__field input[type="range"] {
+  width: 110px;
+}
+
+.editor__value {
+  min-width: 20px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.editor__size {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+}
+
+.editor__body {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.editor__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  border-inline-end: 1px solid var(--border);
+  background: var(--bg-inset);
+  overflow-y: auto;
+}
+
+.editor__tool {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.editor__tool:hover {
+  background: var(--bg-hover);
+}
+
+.editor__tool[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.editor__tool-label {
+  flex: 1;
+}
+
+.editor__note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.editor__canvas-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  /* Checkerboard, so transparency in the capture is unmistakable. */
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(45deg, var(--bg-inset) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg-inset) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg-inset) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg-inset) 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
+
+.editor__canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: crosshair;
+  /* Without this a Retina capture is resampled blurrily while zoomed out. */
+  image-rendering: auto;
+  touch-action: none;
+}

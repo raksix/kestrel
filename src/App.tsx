@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PermissionGate from "./features/settings/PermissionGate";
 import ShortcutSettings from "./features/settings/ShortcutSettings";
+import { openEditor } from "./lib/editorTypes";
 import {
   formatShortcut,
   getSettings,
@@ -350,6 +351,14 @@ function CaptureCard({
             {filename}
           </span>
           <div className="toolbar__spacer" />
+          <button
+            type="button"
+            className="button"
+            style={{ minHeight: 22, padding: "0 var(--space-2)" }}
+            onClick={() => void openEditor()}
+          >
+            Düzenle
+          </button>
           <button
             type="button"
             className="button"

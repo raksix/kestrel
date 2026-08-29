@@ -92,41 +92,41 @@ dosyaya kaydetme.
 ### 3.1 Anotasyon araçları (20)
 Tümü faz 2. Kısayollar ShareX modern editörüyle birebir.
 
-| Kısayol | Araç | Parametreler |
-|---|---|---|
-| `V` | Seç / taşı | — |
-| `R` | Dikdörtgen | kenarlık rengi, dolgu, kalınlık, köşe yarıçapı |
-| `E` | Elips | aynı |
-| `L` | Çizgi | renk, kalınlık, `Shift` 45° kilit |
-| `A` | Ok | renk, kalınlık, uç stili |
-| `F` | Serbest çizim | renk, kalınlık, düzleştirme |
-| `T` | Metin | renk, kontur, font, boyut, B/I/U, hizalama |
-| `O` | Konuşma balonu | kenarlık, dolgu, metin rengi, köşe yarıçapı |
-| `N` | Adım numarası | otomatik artan, renk, şekil |
-| `I` | Görsel ekle | dosyadan / panodan |
-| `J` | Emoji | sistem emoji seçici |
-| `K` | İmleç | imleç görseli yerleştir |
-| `H` | Vurgu | renk, opaklık |
-| `W` | Akıllı silgi | çevre rengini örnekler |
-| `B` | Bulanıklaştır | yarıçap |
-| `P` | Pikselleştir | blok boyutu |
-| `M` | Büyüteç | zoom oranı, çerçeve |
-| `S` | Spot ışığı | dışarıyı karart |
-| `C` | Kırp | |
-| `U` | Kes (cut out) | yatay/dikey şerit çıkar |
+| Kısayol | Araç | Durum | Not |
+|---|---|:-:|---|
+| `V` | Seç / taşı | `[x]` | Tıkla seç, sürükle taşı |
+| `R` | Dikdörtgen | `[x]` | kenarlık, dolgu, kalınlık, köşe yarıçapı |
+| `E` | Elips | `[x]` | |
+| `L` | Çizgi | `[x]` | `Shift` 45° kilit faz 2'nin kalanında |
+| `A` | Ok | `[x]` | uç stilleri modelde var |
+| `F` | Serbest çizim | `[x]` | |
+| `N` | Adım numarası | `[x]` | otomatik artan, silmede yeniden numaralanır |
+| `H` | Vurgu | `[x]` | |
+| `B` | Bulanıklaştır | `[x]` | örnekleme alana sınırlı |
+| `P` | Pikselleştir | `[x]` | |
+| `S` | Spot ışığı | `[x]` | |
+| `T` | Metin | `[ ]` | font altyapısı bekliyor |
+| `O` | Konuşma balonu | `[ ]` | font altyapısı bekliyor |
+| `I` | Görsel ekle | `[ ]` | |
+| `J` | Emoji | `[ ]` | |
+| `K` | İmleç | `[ ]` | |
+| `W` | Akıllı silgi | `[ ]` | |
+| `M` | Büyüteç | `[ ]` | |
+| `C` | Kırp | `[ ]` | |
+| `U` | Kes (cut out) | `[ ]` | |
 
 ### 3.2 Editör eylemleri
 | Kısayol | Eylem | Durum |
 |---|---|:-:|
-| `Enter` | Kaydet ve göreve devam et | `[ ]` |
-| `Esc` | İptal | `[ ]` |
+| `Enter` | Kaydet ve göreve devam et | `[~]` |
+| `Esc` | İptal | `[x]` |
 | `Mod+S` / `Mod+Shift+S` | Kaydet / farklı kaydet | `[ ]` |
 | `Mod+Shift+C` | Panoya kopyala | `[ ]` |
 | `Mod+U` | Yükle | `[ ]` |
 | `Mod+P` | Ekrana sabitle | `[ ]` |
 | `Mod+Shift+P` | Yazdır | `[ ]` |
 | `Mod+Shift+F` | Anotasyonları düzleştir | `[ ]` |
-| `Mod+Z` / `Mod+Shift+Z` | Geri al / yinele | `[ ]` |
+| `Mod+Z` / `Mod+Shift+Z` | Geri al / yinele | `[x]` |
 | Orta tık sürükle | Görüntüyü kaydır | `[ ]` |
 | `Mod`+tekerlek | İmleç merkezli zoom | `[ ]` |
 | `Mod+0` / `Mod+Alt+0` | Zoom sıfırla / sığdır | `[ ]` |
@@ -178,7 +178,7 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | 2 | "Yakalama sonrası" penceresini göster | `[ ]` | 3 |
 | 3 | Görseli güzelleştir | `[ ]` | 2 |
 | 4 | Görsel efektleri uygula | `[ ]` | 5 |
-| 5 | Editörde aç | `[ ]` | 2 |
+| 5 | Editörde aç | `[x]` | 2 |
 | 6 | Panoya kopyala | `[x]` | 1 |
 | 7 | Ekrana sabitle | `[ ]` | 2 |
 | 8 | Yazdır | `[ ]` | 3 |
@@ -499,9 +499,9 @@ Tümü faz 6.
 |---|:-:|:-:|:-:|:-:|
 | Yakalama yöntemleri | 14 | 6 | 0 | 8 |
 | Overlay | 31 | 11 | 1 | 19 |
-| Editör | 33 | 0 | 0 | 33 |
+| Editör | 33 | 13 | 1 | 19 |
 | Efektler | ~40 | 0 | 0 | ~40 |
-| After-capture / after-upload | 28 | 2 | 0 | 26 |
+| After-capture / after-upload | 28 | 3 | 0 | 25 |
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
@@ -510,5 +510,6 @@ Tümü faz 6.
 | Geçmiş | 10 | 0 | 0 | 10 |
 | Ayarlar | 10 | 1 | 2 | 7 |
 
-Faz 1 kapsamındaki her madde tamam. Sıradaki büyük bloklar: editör (faz 2) ve
-uploader motoru (faz 3).
+Faz 1 tamam. Faz 2 sürüyor: anotasyon modeli, geçmiş, renderer ve on bir aracın
+tuvali hazır. Kalan büyük parçalar metin araçları (font altyapısı), kırpma/kes,
+güzelleştirme ve uploader motoru (faz 3).
