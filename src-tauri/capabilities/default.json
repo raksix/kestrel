@@ -18,6 +18,7 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "notification:default",
-    "global-shortcut:default"
+    "global-shortcut:default",
+    "opener:allow-open-url"
   ]
 }

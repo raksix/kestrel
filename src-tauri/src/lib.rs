@@ -7,6 +7,7 @@
 mod capture_service;
 mod commands;
 mod editor;
+mod history;
 mod overlay;
 mod settings;
 mod shortcuts;
@@ -48,6 +49,8 @@ pub fn run() {
         .manage(editor::EditorState::default())
         .manage(editor::LastCapture::default())
         .manage(uploads::DefaultDestination::default())
+        .manage(history::History::open())
+        .manage(history::LastEntryId::default())
         .manage(shortcuts::ShortcutRegistry::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_displays,
@@ -89,6 +92,11 @@ pub fn run() {
             commands::set_default_destination,
             commands::upload_last_capture,
             commands::upload_text,
+            commands::history_list,
+            commands::history_get,
+            commands::history_remove,
+            commands::history_clear,
+            commands::history_count,
         ])
         .setup(|app| {
             build_tray(app.handle())?;

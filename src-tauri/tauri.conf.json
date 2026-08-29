@@ -30,7 +30,8 @@
         "scope": [
           "$APPCACHE/**",
           "$TEMP/**",
-          "$PICTURE/**"
+          "$PICTURE/**",
+          "$HOME/Pictures/**"
         ]
       }
     },

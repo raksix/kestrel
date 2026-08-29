@@ -55,6 +55,30 @@ fn finish_capture(
     let (output, image) = capture_service::process(capture, settings).map_err(err)?;
 
     app.state::<crate::editor::LastCapture>().set(image.clone());
+
+    // Record the capture before anything else can fail. History is a log of
+    // what happened, so an entry that exists without a URL is correct; one that
+    // never appears because a later step errored is not.
+    let entry = crate::history::NewEntry {
+        filename: output
+            .path
+            .as_deref()
+            .and_then(|p| std::path::Path::new(p).file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| format!("{}x{}", output.width, output.height)),
+        path: output.path.clone(),
+        width: output.width,
+        height: output.height,
+        window_title: output.window_title.clone(),
+    };
+    match app
+        .state::<crate::history::History>()
+        .insert(&entry, chrono::Utc::now().timestamp())
+    {
+        Ok(id) => app.state::<crate::history::LastEntryId>().set(id),
+        Err(err) => tracing::warn!(%err, "could not record the capture in history"),
+    }
+
     let _ = app.emit(crate::EVENT_CAPTURE_COMPLETE, output.clone());
 
     // ShareX's "open in image editor" after-capture task. Failing to raise the
@@ -588,8 +612,62 @@ pub async fn upload_last_capture(
         .await
         .map_err(err)?;
 
+    record_upload_in_history(&app, &uploaded);
     let _ = app.emit(crate::EVENT_UPLOAD_COMPLETE, uploaded.clone());
     Ok(uploaded)
+}
+
+/// Attach an upload result to the capture it came from.
+fn record_upload_in_history(app: &AppHandle, uploaded: &crate::uploads::Uploaded) {
+    let Some(entry_id) = app.state::<crate::history::LastEntryId>().get() else {
+        return;
+    };
+    if let Err(err) = app.state::<crate::history::History>().record_upload(
+        entry_id,
+        &uploaded.url,
+        uploaded.thumbnail_url.as_deref(),
+        uploaded.deletion_url.as_deref(),
+        &uploaded.destination,
+    ) {
+        tracing::warn!(%err, "could not record the upload in history");
+    }
+}
+
+// ── History ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn history_list(
+    app: AppHandle,
+    query: Option<crate::history::Query>,
+) -> Result<Vec<crate::history::Entry>, String> {
+    app.state::<crate::history::History>()
+        .list(&query.unwrap_or_default())
+        .map_err(err)
+}
+
+/// Forget an entry. The file on disk is left alone — deleting a screenshot
+/// because someone tidied a list would be a surprise, and an unrecoverable one.
+#[tauri::command]
+pub fn history_remove(app: AppHandle, id: i64) -> Result<(), String> {
+    app.state::<crate::history::History>()
+        .remove(id)
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn history_clear(app: AppHandle) -> Result<(), String> {
+    app.state::<crate::history::History>().clear().map_err(err)
+}
+
+/// One entry, for a detail view or to re-open a capture.
+#[tauri::command]
+pub fn history_get(app: AppHandle, id: i64) -> Result<Option<crate::history::Entry>, String> {
+    app.state::<crate::history::History>().get(id).map_err(err)
+}
+
+#[tauri::command]
+pub fn history_count(app: AppHandle) -> Result<i64, String> {
+    app.state::<crate::history::History>().count().map_err(err)
 }
 
 #[tauri::command]

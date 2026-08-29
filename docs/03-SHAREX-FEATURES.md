@@ -218,8 +218,8 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | 1 | "Yükleme sonrası" penceresini göster | `[ ]` | 3 |
 | 2 | URL kısalt | `[ ]` | 4 |
 | 3 | URL paylaş | `[ ]` | 4 |
-| 4 | URL'yi panoya kopyala | `[ ]` | 3 |
-| 5 | URL'yi aç | `[ ]` | 3 |
+| 4 | URL'yi panoya kopyala | `[x]` | 3 |
+| 5 | URL'yi aç | `[x]` | 3 |
 | 6 | QR kod penceresini göster | `[ ]` | 5 |
 
 ---
@@ -528,7 +528,7 @@ Tümü faz 6.
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
 | Araçlar | 25 | 0 | 0 | 25 |
 | Workflow / otomasyon | 25 | 7 | 1 | 17 |
-| Geçmiş | 10 | 0 | 0 | 10 |
+| Geçmiş | 10 | 5 | 2 | 3 |
 | Ayarlar | 10 | 1 | 2 | 7 |
 
 Faz 1 tamam. Faz 2 sürüyor: anotasyon modeli, geçmiş, renderer ve on bir aracın

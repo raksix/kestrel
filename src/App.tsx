@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Library from "./features/library/Library";
 import PermissionGate from "./features/settings/PermissionGate";
 import ShortcutSettings from "./features/settings/ShortcutSettings";
 import { openEditor } from "./lib/editorTypes";
@@ -177,7 +178,7 @@ export default function App() {
             {section === "shortcuts" && (
               <ShortcutSettings workflows={workflows} onWorkflowsChanged={setWorkflows} />
             )}
-            {section === "library" && <LibraryPanel latest={latest} />}
+            {section === "library" && <Library />}
           </div>
         </div>
       </main>
@@ -296,36 +297,6 @@ function FilenamePlayground() {
         </div>
       </div>
     </section>
-  );
-}
-
-function LibraryPanel({ latest }: { latest: CaptureOutput | null }) {
-  if (!latest) {
-    return (
-      <div className="card">
-        <h2 className="card__title">Henüz yakalama yok</h2>
-        <p className="card__hint">
-          Yakala bölümünden bir işlem seç ya da global kısayolu kullan. Kalıcı geçmiş
-          faz 3'te geliyor.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid">
-      <figure className="card" style={{ margin: 0 }}>
-        <img
-          src={latest.preview}
-          alt="Son yakalama önizlemesi"
-          style={{ width: "100%", borderRadius: "var(--radius)", display: "block" }}
-        />
-        <figcaption className="card__hint" style={{ marginTop: "var(--space-2)" }}>
-          {latest.width} × {latest.height}
-          {latest.path ? ` · ${latest.path}` : ""}
-        </figcaption>
-      </figure>
-    </div>
   );
 }
 

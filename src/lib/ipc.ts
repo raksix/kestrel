@@ -174,12 +174,78 @@ export const setOutputDirectory = (directory: string | null) =>
 export const previewFilename = (pattern: string) =>
   invoke<string>("preview_filename", { pattern });
 
+// ── History ─────────────────────────────────────────────────────────────
+
+export interface HistoryEntry {
+  id: number;
+  /** Unix seconds. */
+  createdAt: number;
+  filename: string;
+  path: string | null;
+  width: number;
+  height: number;
+  windowTitle: string | null;
+  url: string | null;
+  thumbnailUrl: string | null;
+  deletionUrl: string | null;
+  destination: string | null;
+  ocrText: string | null;
+}
+
+export interface HistoryQuery {
+  text?: string;
+  uploadedOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export const historyList = (query?: HistoryQuery) =>
+  invoke<HistoryEntry[]>("history_list", { query });
+export const historyGet = (id: number) => invoke<HistoryEntry | null>("history_get", { id });
+export const historyRemove = (id: number) => invoke<void>("history_remove", { id });
+export const historyClear = () => invoke<void>("history_clear");
+export const historyCount = () => invoke<number>("history_count");
+
+// ── Destinations ────────────────────────────────────────────────────────
+
+export interface Destination {
+  id: string;
+  name: string;
+  host: string;
+  acceptsImage: boolean;
+  acceptsText: boolean;
+  acceptsFile: boolean;
+  shortensUrls: boolean;
+}
+
+export interface Uploaded {
+  url: string;
+  thumbnailUrl: string | null;
+  deletionUrl: string | null;
+  destination: string;
+}
+
+export const listDestinations = () => invoke<Destination[]>("list_destinations");
+export const importUploader = (path: string) =>
+  invoke<Destination>("import_uploader", { path });
+export const removeUploader = (id: string) =>
+  invoke<Destination[]>("remove_uploader", { id });
+export const setDefaultDestination = (id: string | null) =>
+  invoke<void>("set_default_destination", { id });
+export const uploadLastCapture = (destination?: string) =>
+  invoke<Uploaded>("upload_last_capture", { destination });
+
 // ── Events ──────────────────────────────────────────────────────────────
 export const onCaptureComplete = (handler: (output: CaptureOutput) => void): Promise<UnlistenFn> =>
   listen<CaptureOutput>(CAPTURE_COMPLETE, (event) => handler(event.payload));
 
 export const onCaptureFailed = (handler: (message: string) => void): Promise<UnlistenFn> =>
   listen<string>(CAPTURE_FAILED, (event) => handler(event.payload));
+
+export const UPLOAD_COMPLETE = "kestrel://upload-complete";
+
+export const onUploadComplete = (handler: (uploaded: Uploaded) => void): Promise<UnlistenFn> =>
+  listen<Uploaded>(UPLOAD_COMPLETE, (event) => handler(event.payload));
 
 export const onShortcutsChanged = (
   handler: (reports: ShortcutReport[]) => void,
