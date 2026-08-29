@@ -1,0 +1,21 @@
+[package]
+name = "kestrel-upload"
+description = "Uploader engine and ShareX-compatible custom uploader support"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+base64 = "0.22"
+regex = "1"
+serde_json_path = "0.7"
+sxd-document = "0.3"
+sxd-xpath = "0.4"

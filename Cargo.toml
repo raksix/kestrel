@@ -5,6 +5,7 @@ members = [
     "crates/kestrel-core",
     "crates/kestrel-capture",
     "crates/kestrel-editor",
+    "crates/kestrel-upload",
 ]
 
 [workspace.package]
@@ -19,6 +20,7 @@ authors = ["Kestrel contributors"]
 kestrel-core = { path = "crates/kestrel-core" }
 kestrel-capture = { path = "crates/kestrel-capture" }
 kestrel-editor = { path = "crates/kestrel-editor" }
+kestrel-upload = { path = "crates/kestrel-upload" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

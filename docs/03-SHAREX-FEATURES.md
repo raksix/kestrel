@@ -242,7 +242,17 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 ## 8. Hedefler (destinations)
 
 ### 8.1 Custom uploader — en yüksek öncelik
-`.sxcu` formatı birebir. Faz 3. Bu tek başına yüzlerce servisi açar.
+`.sxcu` formatı birebir. Bu tek başına yüzlerce servisi açar.
+
+| Parça | Durum |
+|---|:-:|
+| Syntax motoru (13 fonksiyon) | `[x]` |
+| `.sxcu` dosya modeli ve ayrıştırma | `[x]` |
+| İstek hazırlama (URL, parametre, başlık, gövde) | `[x]` |
+| Yanıt ayrıştırma (URL, thumb, silme, hata) | `[x]` |
+| HTTP yürütme | `[ ]` |
+| Dosya ilişkilendirme ve içe aktarma arayüzü | `[ ]` |
+| İstek/yanıt inspector'ı | `[ ]` |
 
 **Alanlar:** Name · DestinationType · RequestMethod · RequestURL · Parameters ·
 Headers · Body · Arguments · FileFormName · URL · ThumbnailURL · DeletionURL ·
