@@ -83,7 +83,13 @@ pub fn load() -> AppSettings {
 
     match serde_json::from_str::<AppSettings>(&text) {
         Ok(mut settings) => {
-            migrate(&mut settings);
+            // Persist the result, or the same migration runs on every launch
+            // and the file on disk never matches what the app is using.
+            if migrate(&mut settings) {
+                if let Err(err) = save(&settings) {
+                    tracing::warn!(%err, "could not persist migrated settings");
+                }
+            }
             settings
         }
         Err(err) => {
@@ -102,8 +108,21 @@ pub fn load() -> AppSettings {
 /// the UI but never fire, so anyone who ran those builds is silently left with
 /// dead keys. Rebind them to the current default rather than making the user
 /// work out what went wrong.
-fn migrate(settings: &mut AppSettings) {
+/// Bring an older settings file up to date. Returns whether anything changed.
+fn migrate(settings: &mut AppSettings) -> bool {
     let defaults = default_workflows();
+    let mut changed = false;
+
+    // Accelerators already spoken for, so a rebind cannot land on top of one.
+    // Without this, moving Cmd+Shift+4 onto the current default for its
+    // workflow collides with whichever workflow already holds that default —
+    // and one of the two ends up with a shortcut that silently never fires.
+    let mut taken: Vec<String> = settings
+        .workflows
+        .iter()
+        .filter_map(|w| w.shortcut.clone())
+        .filter(|a| kestrel_core::model::system_reserved(a).is_none())
+        .collect();
 
     for workflow in settings.workflows.iter_mut() {
         let Some(accelerator) = workflow.shortcut.as_deref() else {
@@ -113,12 +132,15 @@ fn migrate(settings: &mut AppSettings) {
             continue;
         };
 
-        let replacement = defaults
+        let replacement = kestrel_core::model::fallback_shortcuts(&workflow.id)
             .iter()
-            .find(|d| d.id == workflow.id)
-            .and_then(|d| d.shortcut.clone())
-            // Do not swap one reserved shortcut for another.
-            .filter(|a| kestrel_core::model::system_reserved(a).is_none());
+            .copied()
+            // Do not swap one reserved shortcut for another, and do not take
+            // one another workflow is already using.
+            .find(|a| {
+                kestrel_core::model::system_reserved(a).is_none() && !taken.iter().any(|t| t == a)
+            })
+            .map(str::to_string);
 
         tracing::info!(
             workflow = %workflow.id,
@@ -127,15 +149,21 @@ fn migrate(settings: &mut AppSettings) {
             %owner,
             "rebinding a shortcut the operating system reserves"
         );
+        if let Some(replacement) = &replacement {
+            taken.push(replacement.clone());
+        }
         workflow.shortcut = replacement;
+        changed = true;
     }
 
     // Workflows added after the user's settings file was written.
     for default in defaults {
         if !settings.workflows.iter().any(|w| w.id == default.id) {
             settings.workflows.push(default);
+            changed = true;
         }
     }
+    changed
 }
 
 /// Write settings atomically so an interrupted save cannot truncate the file.
@@ -230,6 +258,45 @@ mod tests {
         let before = bindable(&settings);
         settings.workflows[0].enabled = false;
         assert_eq!(bindable(&settings), before - 1);
+    }
+
+    fn shortcuts_of(settings: &AppSettings) -> Vec<String> {
+        settings
+            .workflows
+            .iter()
+            .filter_map(|w| w.shortcut.clone())
+            .collect()
+    }
+
+    #[test]
+    fn migration_never_leaves_two_workflows_on_one_shortcut() {
+        // The failure this guards against: a settings file where one workflow
+        // already holds the accelerator another is about to be moved onto. The
+        // loser registers second, fails, and its shortcut silently never fires.
+        let mut settings = AppSettings::default();
+        settings.workflows[0].shortcut = Some("CmdOrCtrl+Shift+3".into());
+        settings.workflows[1].shortcut = Some("CmdOrCtrl+Shift+4".into());
+
+        migrate(&mut settings);
+
+        let mut bound = shortcuts_of(&settings);
+        let count = bound.len();
+        bound.sort();
+        bound.dedup();
+        assert_eq!(bound.len(), count, "shortcuts must stay unique: {bound:?}");
+    }
+
+    #[test]
+    fn migration_reports_whether_it_changed_anything() {
+        let mut untouched = AppSettings::default();
+        assert!(
+            !migrate(&mut untouched),
+            "current defaults need no migration"
+        );
+
+        let mut stale = AppSettings::default();
+        stale.workflows[0].shortcut = Some("CmdOrCtrl+Shift+4".into());
+        assert!(migrate(&mut stale));
     }
 
     #[test]

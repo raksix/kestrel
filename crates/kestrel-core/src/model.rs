@@ -222,6 +222,24 @@ pub fn default_workflows() -> Vec<Workflow> {
     ]
 }
 
+/// Alternates to try when a workflow's default shortcut cannot be registered.
+///
+/// Whether a combination is free depends on the machine — another application
+/// may already hold it, and there is no way to know until registration fails.
+/// Shipping a default that turns out to be dead is worse than quietly landing
+/// on the next one and showing the user what it became.
+pub fn fallback_shortcuts(workflow_id: &str) -> &'static [&'static str] {
+    match workflow_id {
+        "capture-region" => &["CmdOrCtrl+Shift+2", "CmdOrCtrl+Alt+2", "CmdOrCtrl+Shift+A"],
+        "capture-fullscreen" => &["CmdOrCtrl+Shift+1", "CmdOrCtrl+Alt+1", "CmdOrCtrl+Shift+F"],
+        "capture-window" => &["CmdOrCtrl+Shift+7", "CmdOrCtrl+Alt+W", "CmdOrCtrl+Shift+W"],
+        "capture-active-window" => &["CmdOrCtrl+Shift+8", "CmdOrCtrl+Alt+8"],
+        "capture-monitor" => &["CmdOrCtrl+Shift+9", "CmdOrCtrl+Alt+9"],
+        "record-screen" => &["CmdOrCtrl+Shift+0", "CmdOrCtrl+Alt+0", "CmdOrCtrl+Shift+R"],
+        _ => &[],
+    }
+}
+
 /// Accelerators the operating system claims for itself.
 ///
 /// These *register* successfully — Carbon happily hands out the binding — but
@@ -261,6 +279,62 @@ mod tests {
                 AfterCaptureTask::UploadImageToHost,
             ]
         );
+    }
+
+    #[test]
+    fn every_workflow_has_fallback_shortcuts_starting_with_its_default() {
+        for workflow in default_workflows() {
+            let fallbacks = fallback_shortcuts(&workflow.id);
+            assert!(
+                !fallbacks.is_empty(),
+                "{} has no alternates, so a taken shortcut leaves it dead",
+                workflow.id
+            );
+            assert_eq!(
+                Some(fallbacks[0]),
+                workflow.shortcut.as_deref(),
+                "{}'s first candidate must be the shipped default",
+                workflow.id
+            );
+        }
+    }
+
+    #[test]
+    fn no_fallback_shortcut_collides_with_the_operating_system() {
+        // Falling back onto a combination macOS swallows would trade one dead
+        // shortcut for another.
+        for workflow in default_workflows() {
+            for accelerator in fallback_shortcuts(&workflow.id) {
+                assert_eq!(
+                    system_reserved(accelerator),
+                    None,
+                    "{} may fall back to {accelerator}, which the OS owns",
+                    workflow.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fallback_lists_do_not_overlap_between_workflows() {
+        // Two workflows racing for the same alternate would make the outcome
+        // depend on iteration order.
+        let workflows = default_workflows();
+        for (i, a) in workflows.iter().enumerate() {
+            for b in workflows.iter().skip(i + 1) {
+                let shared: Vec<&str> = fallback_shortcuts(&a.id)
+                    .iter()
+                    .filter(|x| fallback_shortcuts(&b.id).contains(x))
+                    .copied()
+                    .collect();
+                assert!(
+                    shared.is_empty(),
+                    "{} and {} both list {shared:?}",
+                    a.id,
+                    b.id
+                );
+            }
+        }
     }
 
     #[test]

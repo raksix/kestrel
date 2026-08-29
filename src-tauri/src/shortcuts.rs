@@ -191,6 +191,21 @@ mod tests {
         assert_ne!(a, c);
     }
 
+    /// A fallback that cannot be parsed is worse than no fallback: it looks
+    /// like a safety net in the source and silently does nothing at runtime.
+    #[test]
+    fn every_fallback_shortcut_parses() {
+        for workflow in kestrel_core::default_workflows() {
+            for accelerator in kestrel_core::model::fallback_shortcuts(&workflow.id) {
+                assert!(
+                    accelerator.parse::<Shortcut>().is_ok(),
+                    "fallback {accelerator} for {} does not parse",
+                    workflow.id
+                );
+            }
+        }
+    }
+
     #[test]
     fn every_default_shortcut_parses() {
         for workflow in kestrel_core::default_workflows() {
