@@ -20,8 +20,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 kestrel-core.workspace = true
 kestrel-capture.workspace = true
+kestrel-editor.workspace = true
 
-tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"

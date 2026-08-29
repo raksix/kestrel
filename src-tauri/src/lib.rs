@@ -6,6 +6,7 @@
 
 mod capture_service;
 mod commands;
+mod editor;
 mod overlay;
 mod settings;
 mod shortcuts;
@@ -41,6 +42,8 @@ pub fn run() {
         .plugin(shortcuts::plugin())
         .manage(settings::SettingsState::new())
         .manage(overlay::OverlayState::default())
+        .manage(editor::EditorState::default())
+        .manage(editor::LastCapture::default())
         .manage(shortcuts::ShortcutRegistry::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_displays,
@@ -72,6 +75,10 @@ pub fn run() {
             commands::set_output_directory,
             commands::preview_filename,
             commands::run_workflow,
+            commands::open_editor,
+            commands::editor_session,
+            commands::close_editor,
+            commands::editor_export,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
@@ -113,6 +120,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let monitor_menu = MenuItem::with_id(app, "capture-monitor", "Ekran seç…", true, None::<&str>)?;
+    let edit_last = MenuItem::with_id(
+        app,
+        "edit-last",
+        "Son yakalamayı düzenle…",
+        true,
+        None::<&str>,
+    )?;
     let library = MenuItem::with_id(app, "open-library", "Kestrel'i aç…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Kestrel'den çık", true, None::<&str>)?;
 
@@ -125,6 +139,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &active_window,
             &monitor_menu,
             &PredefinedMenuItem::separator(app)?,
+            &edit_last,
             &library,
             &PredefinedMenuItem::separator(app)?,
             &quit,
@@ -147,6 +162,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             "capture-window" => run_in_background(app, CaptureMethod::WindowMenu),
             "capture-active-window" => run_in_background(app, CaptureMethod::ActiveWindow),
             "capture-monitor" => run_in_background(app, CaptureMethod::MonitorMenu),
+            "edit-last" => open_editor(app),
             "open-library" => show_main_window(app),
             "quit" => app.exit(0),
             other => tracing::warn!(id = other, "unhandled tray menu item"),
@@ -154,6 +170,15 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .build(app)?;
 
     Ok(())
+}
+
+/// Raise the editor on the last capture, reporting failure the same way a
+/// failed capture is reported rather than doing nothing visible.
+fn open_editor(app: &AppHandle) {
+    if let Err(err) = editor::open_last(app) {
+        tracing::warn!(%err, "could not open the editor");
+        let _ = app.emit(EVENT_CAPTURE_FAILED, err.to_string());
+    }
 }
 
 fn show_main_window(app: &AppHandle) {

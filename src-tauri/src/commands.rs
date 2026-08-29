@@ -37,14 +37,39 @@ fn require_permission() -> Result<(), String> {
     )
 }
 
-/// Broadcast a finished capture so every window learns about it.
+/// Run the after-capture pipeline, remember the image, and tell every window.
 ///
-/// The overlay and the picker are closed immediately after they commit, so the
-/// value returned to *them* is discarded. Without this event the main window
-/// would never show a capture the user made from either surface.
-fn finish_capture(app: &AppHandle, output: CaptureOutput) -> CaptureOutput {
+/// Every capture path goes through here so they cannot drift apart. Two things
+/// have to happen beyond the pipeline itself:
+///
+/// - The image is kept so the editor can be opened after the fact. The clone
+///   costs one memcpy of the frame, which is far cheaper than re-capturing —
+///   and re-capturing would grab a screen that has since changed.
+/// - The result is broadcast, because the overlay and the picker are closed
+///   the moment they commit, so the value returned to *them* goes nowhere.
+fn finish_capture(
+    app: &AppHandle,
+    capture: kestrel_capture::Capture,
+    settings: &TaskSettings,
+) -> Result<CaptureOutput, String> {
+    let image = capture.image.clone();
+    let output = capture_service::process(capture, settings).map_err(err)?;
+
+    app.state::<crate::editor::LastCapture>().set(image.clone());
     let _ = app.emit(crate::EVENT_CAPTURE_COMPLETE, output.clone());
-    output
+
+    // ShareX's "open in image editor" after-capture task. Failing to raise the
+    // editor must not lose the capture, which is already saved by this point.
+    if settings
+        .after_capture
+        .contains(&kestrel_core::model::AfterCaptureTask::OpenInEditor)
+    {
+        if let Err(e) = crate::editor::open(app, image) {
+            tracing::error!(%e, "could not open the editor");
+        }
+    }
+
+    Ok(output)
 }
 
 // ── Discovery ───────────────────────────────────────────────────────────
@@ -95,10 +120,13 @@ fn task_settings(settings: &State<'_, SettingsState>, workflow_id: Option<&str>)
 }
 
 #[tauri::command]
-pub fn capture_fullscreen(settings: State<'_, SettingsState>) -> Result<CaptureOutput, String> {
+pub fn capture_fullscreen(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+) -> Result<CaptureOutput, String> {
     require_permission()?;
     let capture = backend().capture_all_displays().map_err(err)?;
-    capture_service::process(capture, &task_settings(&settings, None)).map_err(err)
+    finish_capture(&app, capture, &task_settings(&settings, None))
 }
 
 #[tauri::command]
@@ -109,8 +137,7 @@ pub fn capture_display(
 ) -> Result<CaptureOutput, String> {
     require_permission()?;
     let capture = backend().capture_display(id).map_err(err)?;
-    let output = capture_service::process(capture, &task_settings(&settings, None)).map_err(err)?;
-    Ok(finish_capture(&app, output))
+    finish_capture(&app, capture, &task_settings(&settings, None))
 }
 
 #[tauri::command]
@@ -121,13 +148,15 @@ pub fn capture_window(
 ) -> Result<CaptureOutput, String> {
     require_permission()?;
     let capture = backend().capture_window(id).map_err(err)?;
-    let output = capture_service::process(capture, &task_settings(&settings, None)).map_err(err)?;
-    Ok(finish_capture(&app, output))
+    finish_capture(&app, capture, &task_settings(&settings, None))
 }
 
 /// The front-most window, without showing a picker — ShareX's "active window".
 #[tauri::command]
-pub fn capture_active_window(settings: State<'_, SettingsState>) -> Result<CaptureOutput, String> {
+pub fn capture_active_window(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+) -> Result<CaptureOutput, String> {
     require_permission()?;
     let backend = backend();
     let windows = backend.windows().map_err(err)?;
@@ -137,7 +166,7 @@ pub fn capture_active_window(settings: State<'_, SettingsState>) -> Result<Captu
         .or_else(|| windows.first())
         .ok_or("Yakalanabilir pencere bulunamadı.")?;
     let capture = backend.capture_window(front.id).map_err(err)?;
-    capture_service::process(capture, &task_settings(&settings, None)).map_err(err)
+    finish_capture(&app, capture, &task_settings(&settings, None))
 }
 
 /// A small preview of a window, for the picker grid.
@@ -250,8 +279,7 @@ pub fn commit_region_capture(
     settings: State<'_, SettingsState>,
 ) -> Result<CaptureOutput, String> {
     let capture = overlay::crop_selection(&app, region)?;
-    let output = capture_service::process(capture, &task_settings(&settings, None)).map_err(err)?;
-    Ok(finish_capture(&app, output))
+    finish_capture(&app, capture, &task_settings(&settings, None))
 }
 
 #[tauri::command]
@@ -412,6 +440,45 @@ pub fn preview_filename(pattern: String) -> String {
     name_pattern::expand_sanitized(&pattern, &ctx)
 }
 
+// ── Editor ──────────────────────────────────────────────────────────────
+
+/// Open the annotation editor on the most recent capture.
+#[tauri::command]
+pub fn open_editor(app: AppHandle) -> Result<crate::editor::EditorOpened, String> {
+    crate::editor::open_last(&app).map_err(err)
+}
+
+/// What the editor window should load. Called by the editor on mount, and
+/// again when it regains focus in case a newer capture replaced the session.
+#[tauri::command]
+pub fn editor_session(app: AppHandle) -> Result<crate::editor::EditorOpened, String> {
+    crate::editor::session(&app).map_err(err)
+}
+
+#[tauri::command]
+pub fn close_editor(app: AppHandle) {
+    crate::editor::close(&app);
+}
+
+/// Flatten the annotations and run the after-capture pipeline over the result,
+/// exactly as a fresh capture would — so the filename pattern, output folder
+/// and clipboard behaviour stay consistent with everything else.
+#[tauri::command]
+pub fn editor_export(
+    app: AppHandle,
+    document: String,
+    settings: State<'_, SettingsState>,
+) -> Result<CaptureOutput, String> {
+    let image = crate::editor::render(&app, &document).map_err(err)?;
+    let capture = kestrel_capture::Capture {
+        region: kestrel_capture::Region::new(0, 0, image.width(), image.height()),
+        image,
+        window_title: None,
+        app_name: None,
+    };
+    finish_capture(&app, capture, &task_settings(&settings, None))
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────
 
 /// Run a workflow by id. Interactive methods open their own UI; direct ones
@@ -456,9 +523,7 @@ pub fn dispatch(
         // Direct.
         M::Fullscreen => {
             let capture = backend().capture_all_displays().map_err(err)?;
-            capture_service::process(capture, settings)
-                .map(Some)
-                .map_err(err)
+            finish_capture(app, capture, settings).map(Some)
         }
         M::ActiveMonitor => {
             let backend = backend();
@@ -469,9 +534,7 @@ pub fn dispatch(
                 .or_else(|| displays.first())
                 .ok_or("Ekran bulunamadı.")?;
             let capture = backend.capture_display(target.id).map_err(err)?;
-            capture_service::process(capture, settings)
-                .map(Some)
-                .map_err(err)
+            finish_capture(app, capture, settings).map(Some)
         }
         M::ActiveWindow => {
             let backend = backend();
@@ -482,9 +545,7 @@ pub fn dispatch(
                 .or_else(|| windows.first())
                 .ok_or("Yakalanabilir pencere bulunamadı.")?;
             let capture = backend.capture_window(front.id).map_err(err)?;
-            capture_service::process(capture, settings)
-                .map(Some)
-                .map_err(err)
+            finish_capture(app, capture, settings).map(Some)
         }
 
         // Not built yet. Say so plainly rather than quietly doing something

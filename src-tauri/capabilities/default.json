@@ -5,7 +5,8 @@
   "windows": [
     "main",
     "overlay-*",
-    "picker"
+    "picker",
+    "editor"
   ],
   "permissions": [
     "core:default",
