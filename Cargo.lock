@@ -2488,6 +2488,7 @@ dependencies = [
 name = "kestrel-capture"
 version = "0.1.0"
 dependencies = [
+ "arboard",
  "image",
  "kestrel-core",
  "serde",

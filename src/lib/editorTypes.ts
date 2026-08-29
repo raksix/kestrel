@@ -256,6 +256,57 @@ export function translate(shape: Shape, dx: number, dy: number): Shape {
   }
 }
 
+/**
+ * Move and scale a shape into another coordinate space.
+ *
+ * The selection overlay works in logical points while the captured image is in
+ * physical pixels, so on a Retina display every shape has to be scaled by the
+ * display's factor as well as shifted by the crop origin. Getting this wrong
+ * puts annotations at half position and half size, which is exactly the kind of
+ * bug that only shows up on one machine.
+ */
+export function transformShape(shape: Shape, dx: number, dy: number, scale: number): Shape {
+  const point = (p: Point): Point => ({ x: (p.x + dx) * scale, y: (p.y + dy) * scale });
+  const rect = (r: Rect): Rect => ({
+    x: (r.x + dx) * scale,
+    y: (r.y + dy) * scale,
+    width: r.width * scale,
+    height: r.height * scale,
+  });
+
+  switch (shape.kind) {
+    case "line":
+      return { ...shape, from: point(shape.from), to: point(shape.to), stroke: scaleStroke(shape.stroke, scale) };
+    case "arrow":
+      return { ...shape, from: point(shape.from), to: point(shape.to), stroke: scaleStroke(shape.stroke, scale) };
+    case "freehand":
+      return { ...shape, points: shape.points.map(point), stroke: scaleStroke(shape.stroke, scale) };
+    case "step":
+      return { ...shape, center: point(shape.center), radius: shape.radius * scale };
+    case "rectangle":
+      return { ...shape, rect: rect(shape.rect), stroke: scaleStroke(shape.stroke, scale), corner_radius: shape.corner_radius * scale };
+    case "ellipse":
+      return { ...shape, rect: rect(shape.rect), stroke: scaleStroke(shape.stroke, scale) };
+    case "blur":
+      return { ...shape, rect: rect(shape.rect), radius: shape.radius * scale };
+    case "text":
+      return { ...shape, rect: rect(shape.rect), size: shape.size * scale };
+    case "speech_balloon":
+      return { ...shape, rect: rect(shape.rect), tail: point(shape.tail), size: shape.size * scale, stroke: scaleStroke(shape.stroke, scale) };
+    case "pixelate":
+      // Block size scales too, or a redaction becomes finer — and therefore
+      // more readable — on a high-density display.
+      return { ...shape, rect: rect(shape.rect), block: Math.max(2, Math.round(shape.block * scale)) };
+    default:
+      return { ...shape, rect: rect(shape.rect) };
+  }
+}
+
+const scaleStroke = (stroke: Stroke, scale: number): Stroke => ({
+  ...stroke,
+  width: stroke.width * scale,
+});
+
 /** Step callouts are renumbered 1..n so deleting one leaves no gap. */
 export function renumberSteps(shapes: Shape[]): Shape[] {
   let next = 1;

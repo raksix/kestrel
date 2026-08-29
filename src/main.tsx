@@ -29,6 +29,7 @@ function root() {
         <Overlay
           origin={{ x: number("x"), y: number("y") }}
           size={{ width: number("w", window.innerWidth), height: number("h", window.innerHeight) }}
+          scale={number("s", 1) || 1}
         />
       );
     case "editor":

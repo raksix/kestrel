@@ -52,8 +52,7 @@ fn finish_capture(
     capture: kestrel_capture::Capture,
     settings: &TaskSettings,
 ) -> Result<CaptureOutput, String> {
-    let image = capture.image.clone();
-    let output = capture_service::process(capture, settings).map_err(err)?;
+    let (output, image) = capture_service::process(capture, settings).map_err(err)?;
 
     app.state::<crate::editor::LastCapture>().set(image.clone());
     let _ = app.emit(crate::EVENT_CAPTURE_COMPLETE, output.clone());
@@ -276,9 +275,23 @@ pub fn begin_region_capture(app: AppHandle) -> Result<(), String> {
 pub fn commit_region_capture(
     app: AppHandle,
     region: Region,
+    document: Option<String>,
     settings: State<'_, SettingsState>,
 ) -> Result<CaptureOutput, String> {
-    let capture = overlay::crop_selection(&app, region)?;
+    let mut capture = overlay::crop_selection(&app, region)?;
+
+    // Anything drawn on the overlay is rendered here rather than in the
+    // webview, for the same reason the editor's export is: this is the only
+    // way the file matches across platforms. Shapes arrive in the coordinate
+    // space of the *cropped* image, which is what the overlay drew on.
+    if let Some(document) = document.filter(|d| !d.trim().is_empty()) {
+        match serde_json::from_str::<kestrel_editor::Document>(&document) {
+            Ok(parsed) => capture.image = kestrel_editor::render(&capture.image, &parsed),
+            // Losing the annotations is bad; losing the capture is worse.
+            Err(err) => tracing::error!(%err, "overlay annotations could not be parsed"),
+        }
+    }
+
     finish_capture(&app, capture, &task_settings(&settings, None))
 }
 

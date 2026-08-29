@@ -147,8 +147,8 @@ export const listDisplayPreviews = () => invoke<TargetPreview[]>("list_display_p
 
 // ── Region selection ────────────────────────────────────────────────────
 export const beginRegionCapture = () => invoke<void>("begin_region_capture");
-export const commitRegionCapture = (region: Region) =>
-  invoke<CaptureOutput>("commit_region_capture", { region });
+export const commitRegionCapture = (region: Region, document?: string) =>
+  invoke<CaptureOutput>("commit_region_capture", { region, document });
 export const cancelRegionCapture = () => invoke<void>("cancel_region_capture");
 
 // ── Picker ──────────────────────────────────────────────────────────────

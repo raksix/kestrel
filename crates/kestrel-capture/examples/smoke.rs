@@ -21,6 +21,10 @@ fn main() {
         Err(e) => println!("displays FAILED: {e}"),
     }
 
+    let t = std::time::Instant::now();
+    let window_time = b.windows().map(|w| (w.len(), t.elapsed()));
+    println!("windows() took {:?}", window_time.as_ref().map(|(_, d)| *d));
+
     match b.windows() {
         Ok(w) => {
             println!("windows: {}", w.len());

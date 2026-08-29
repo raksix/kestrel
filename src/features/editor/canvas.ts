@@ -46,6 +46,24 @@ export function drawDocument(
   applyFrame(ctx, annotated, frame);
 }
 
+/**
+ * Draw annotations onto a transparent canvas, with no base image.
+ *
+ * The selection overlay uses this: its shapes sit above the dimming layer, so
+ * compositing them onto a copy of the screen would bake the dim into any blur
+ * or pixelate region.
+ */
+export function drawShapesOnly(
+  ctx: CanvasRenderingContext2D,
+  shapes: Shape[],
+  width: number,
+  height: number,
+): void {
+  for (const shape of shapes) {
+    drawShape(ctx, shape, width, height);
+  }
+}
+
 /** Crop, round, shadow and background, onto a canvas already sized to fit. */
 function applyFrame(
   ctx: CanvasRenderingContext2D,

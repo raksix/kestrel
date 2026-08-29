@@ -15,3 +15,6 @@ thiserror.workspace = true
 tracing.workspace = true
 image.workspace = true
 xcap.workspace = true
+
+[dev-dependencies]
+arboard = "3"

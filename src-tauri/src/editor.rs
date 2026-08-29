@@ -102,12 +102,18 @@ pub fn open(app: &AppHandle, image: RgbaImage) -> Result<EditorOpened> {
         staged: staged.clone(),
     });
 
-    if let Some(existing) = app.get_webview_window(EDITOR_LABEL) {
-        // Reuse the window; the frontend reloads the session on focus.
-        let _ = existing.set_focus();
-    } else {
-        WebviewWindowBuilder::new(
-            app,
+    // macOS creates windows on the main thread only, and Tauri's builder called
+    // from a worker blocks until the event loop wakes. Queue it instead.
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        if let Some(existing) = handle.get_webview_window(EDITOR_LABEL) {
+            // Reuse the window; the frontend reloads the session on focus.
+            let _ = existing.set_focus();
+            return;
+        }
+
+        let built = WebviewWindowBuilder::new(
+            &handle,
             EDITOR_LABEL,
             WebviewUrl::App("index.html?view=editor".into()),
         )
@@ -116,8 +122,12 @@ pub fn open(app: &AppHandle, image: RgbaImage) -> Result<EditorOpened> {
         .min_inner_size(640.0, 480.0)
         .center()
         .resizable(true)
-        .build()?;
-    }
+        .build();
+
+        if let Err(err) = built {
+            tracing::error!(%err, "could not open the editor window");
+        }
+    })?;
 
     Ok(EditorOpened {
         path: staged.to_string_lossy().into_owned(),
@@ -167,9 +177,12 @@ pub fn close(app: &AppHandle) {
     if let Some(session) = app.state::<EditorState>().clear() {
         let _ = std::fs::remove_file(session.staged);
     }
-    if let Some(window) = app.get_webview_window(EDITOR_LABEL) {
-        let _ = window.close();
-    }
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(window) = handle.get_webview_window(EDITOR_LABEL) {
+            let _ = window.close();
+        }
+    });
 }
 
 /// Write the base image somewhere the webview is allowed to read from.

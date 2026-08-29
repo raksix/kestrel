@@ -50,7 +50,10 @@ pub enum ServiceError {
 pub type Result<T> = std::result::Result<T, ServiceError>;
 
 /// Run the enabled after-capture tasks over a fresh capture.
-pub fn process(capture: Capture, settings: &TaskSettings) -> Result<CaptureOutput> {
+///
+/// Returns the image alongside the result so callers that need to keep it —
+/// the editor, an upload — do not pay for a copy of a multi-megapixel frame.
+pub fn process(capture: Capture, settings: &TaskSettings) -> Result<(CaptureOutput, RgbaImage)> {
     let width = capture.width();
     let height = capture.height();
     let preview = encode_preview(&capture.image)?;
@@ -76,15 +79,18 @@ pub fn process(capture: Capture, settings: &TaskSettings) -> Result<CaptureOutpu
         path = Some(saved.to_string_lossy().into_owned());
     }
 
-    Ok(CaptureOutput {
-        path,
-        width,
-        height,
-        region: capture.region,
-        preview,
-        copied_to_clipboard: copied,
-        window_title: capture.window_title.clone(),
-    })
+    Ok((
+        CaptureOutput {
+            path,
+            width,
+            height,
+            region: capture.region,
+            preview,
+            copied_to_clipboard: copied,
+            window_title: capture.window_title.clone(),
+        },
+        capture.image,
+    ))
 }
 
 /// Expand the workflow's filename pattern and write the image to disk.

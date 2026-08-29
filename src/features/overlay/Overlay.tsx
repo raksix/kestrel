@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cancelRegionCapture,
   commitRegionCapture,
@@ -6,12 +6,24 @@ import {
   type Region,
   type WindowInfo,
 } from "../../lib/ipc";
+import {
+  fromHex,
+  renumberSteps,
+  transformShape,
+  TRANSPARENT,
+  type Color,
+  type Shape,
+} from "../../lib/editorTypes";
+import { drawShapesOnly } from "../editor/canvas";
+import OverlayToolbar, { OVERLAY_TOOLS, type OverlayTool } from "./OverlayToolbar";
 import "./overlay.css";
 
 interface OverlayProps {
   /** Display bounds in the global logical coordinate space. */
   origin: { x: number; y: number };
   size: { width: number; height: number };
+  /** Physical pixels per logical point on this display. */
+  scale: number;
 }
 
 interface Point {
@@ -32,21 +44,35 @@ function rectFromPoints(a: Point, b: Point): Region {
 }
 
 /**
- * Full-screen selection overlay.
+ * Full-screen selection overlay, with annotation.
  *
- * Coordinates inside this component are *local* CSS pixels, which map 1:1 to
- * logical points because the window is sized to the display's logical bounds.
- * Only at commit time are they shifted into global space by adding the display
- * origin — the same space the Rust side crops in.
+ * Coordinates here are *local* CSS pixels, which map 1:1 to logical points
+ * because the window is sized to the display's logical bounds. Only at commit
+ * time are they shifted into global space, and annotations additionally scaled
+ * into the captured image's physical pixels.
+ *
+ * The interaction follows ShareX: pick a tool and draw, then drag a region and
+ * release to finish. With no tool selected — the default — a drag is the
+ * selection itself, so the fast path stays one gesture.
  */
-export default function Overlay({ origin, size }: OverlayProps) {
+export default function Overlay({ origin, size, scale }: OverlayProps) {
   const [anchor, setAnchor] = useState<Point | null>(null);
   const [cursor, setCursor] = useState<Point>({ x: 0, y: 0 });
   const [selection, setSelection] = useState<Region | null>(null);
   const [windows, setWindows] = useState<WindowInfo[]>([]);
   const [hovered, setHovered] = useState<WindowInfo | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [tool, setTool] = useState<OverlayTool>(null);
+  const [color, setColor] = useState<Color>(fromHex("#ff453a"));
+  const [strokeWidth, setStrokeWidth] = useState(4);
+  const [shapes, setShapes] = useState<Shape[]>([]);
+  const [drawing, setDrawing] = useState<{ origin: Point; current: Point; points?: Point[] } | null>(
+    null,
+  );
+
   const committing = useRef(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Window rects power snap-to-window. If enumeration is unavailable (Wayland,
   // or a missing permission) the overlay still works as a plain drag selector.
@@ -56,26 +82,42 @@ export default function Overlay({ origin, size }: OverlayProps) {
       .catch(() => setWindows([]));
   }, []);
 
+  const shapesRef = useRef<Shape[]>([]);
+  useEffect(() => {
+    shapesRef.current = shapes;
+  }, [shapes]);
+
   const commit = useCallback(
     async (region: Region) => {
       if (committing.current) return;
       if (region.width < 1 || region.height < 1) return;
       committing.current = true;
       setBusy(true);
+
+      // Annotations were drawn in screen space; the captured image starts at
+      // the selection origin and is in physical pixels.
+      const drawn = shapesRef.current.map((shape) =>
+        transformShape(shape, -region.x, -region.y, scale),
+      );
+      const document = drawn.length > 0 ? JSON.stringify({ shapes: drawn }) : undefined;
+
       try {
-        await commitRegionCapture({
-          x: Math.round(region.x + origin.x),
-          y: Math.round(region.y + origin.y),
-          width: Math.round(region.width),
-          height: Math.round(region.height),
-        });
+        await commitRegionCapture(
+          {
+            x: Math.round(region.x + origin.x),
+            y: Math.round(region.y + origin.y),
+            width: Math.round(region.width),
+            height: Math.round(region.height),
+          },
+          document,
+        );
       } catch (error) {
         console.error("region capture failed", error);
         committing.current = false;
         setBusy(false);
       }
     },
-    [origin],
+    [origin, scale],
   );
 
   const cancel = useCallback(() => {
@@ -84,8 +126,6 @@ export default function Overlay({ origin, size }: OverlayProps) {
     void cancelRegionCapture();
   }, []);
 
-  // The window under the cursor, front-most first. `windows` arrives sorted by
-  // stacking order, so the first hit is the visible one.
   const windowAt = useCallback(
     (point: Point): WindowInfo | null => {
       const globalX = point.x + origin.x;
@@ -113,11 +153,168 @@ export default function Overlay({ origin, size }: OverlayProps) {
     [origin],
   );
 
+  // ── Drawing ───────────────────────────────────────────────────────────
+
+  const buildShape = useCallback(
+    (from: Point, to: Point, points?: Point[]): Shape | null => {
+      const stroke = { color, width: strokeWidth };
+      const rect = rectFromPoints(from, to);
+      const tiny = rect.width < 2 && rect.height < 2;
+      const stepNumber = shapes.filter((s) => s.kind === "step").length + 1;
+
+      switch (tool) {
+        case "rectangle":
+          return tiny ? null : { kind: "rectangle", rect, stroke, fill: TRANSPARENT, corner_radius: 0 };
+        case "ellipse":
+          return tiny ? null : { kind: "ellipse", rect, stroke, fill: TRANSPARENT };
+        case "line":
+          return tiny ? null : { kind: "line", from, to, stroke };
+        case "arrow":
+          return tiny ? null : { kind: "arrow", from, to, stroke, head: "end" };
+        case "freehand":
+          return !points || points.length < 2 ? null : { kind: "freehand", points, stroke };
+        case "highlight":
+          return tiny ? null : { kind: "highlight", rect, color: { ...color, a: 90 } };
+        case "blur":
+          return tiny ? null : { kind: "blur", rect, radius: 12 };
+        case "pixelate":
+          return tiny ? null : { kind: "pixelate", rect, block: 12 };
+        case "step":
+          return {
+            kind: "step",
+            center: to,
+            radius: 16,
+            number: stepNumber,
+            fill: color,
+            text_color: { r: 255, g: 255, b: 255, a: 255 },
+          };
+        default:
+          return null;
+      }
+    },
+    [tool, color, strokeWidth, shapes],
+  );
+
+  const previewShape = useMemo(
+    () => (drawing ? buildShape(drawing.origin, drawing.current, drawing.points) : null),
+    [drawing, buildShape],
+  );
+
+  // Annotations are painted on their own transparent canvas above the dimming,
+  // so the dim layer never ends up composited into a shape.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const painted = previewShape ? [...shapes, previewShape] : shapes;
+    drawShapesOnly(ctx, painted, canvas.width, canvas.height);
+  }, [shapes, previewShape, size]);
+
+  // ── Pointer ───────────────────────────────────────────────────────────
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button === 2) {
+      cancel();
+      return;
+    }
+    const point = { x: event.clientX, y: event.clientY };
+    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+
+    if (tool) {
+      if (tool === "step") {
+        setShapes((current) => renumberSteps([...current, buildShape(point, point)!]));
+        return;
+      }
+      setDrawing({
+        origin: point,
+        current: point,
+        points: tool === "freehand" ? [point] : undefined,
+      });
+      return;
+    }
+
+    setAnchor(point);
+    setSelection({ x: point.x, y: point.y, width: 0, height: 0 });
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const point = { x: event.clientX, y: event.clientY };
+    setCursor(point);
+
+    if (drawing) {
+      setDrawing({
+        ...drawing,
+        current: point,
+        points: drawing.points ? [...drawing.points, point] : undefined,
+      });
+      return;
+    }
+
+    if (anchor) {
+      let next = rectFromPoints(anchor, point);
+      if (event.shiftKey) {
+        const edge = Math.max(next.width, next.height);
+        next = {
+          x: point.x < anchor.x ? anchor.x - edge : anchor.x,
+          y: point.y < anchor.y ? anchor.y - edge : anchor.y,
+          width: edge,
+          height: edge,
+        };
+      }
+      setSelection(next);
+      setHovered(null);
+      return;
+    }
+
+    if (!tool) setHovered(windowAt(point));
+  };
+
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const point = { x: event.clientX, y: event.clientY };
+
+    if (drawing) {
+      const shape = buildShape(drawing.origin, point, drawing.points);
+      setDrawing(null);
+      if (shape) setShapes((current) => renumberSteps([...current, shape]));
+      return;
+    }
+
+    if (!anchor) return;
+    const region = rectFromPoints(anchor, point);
+    setAnchor(null);
+
+    const isClick = region.width < CLICK_THRESHOLD && region.height < CLICK_THRESHOLD;
+    if (isClick) {
+      const target = windowAt(point);
+      if (target) {
+        void commit(toLocal(target.region));
+      } else {
+        setSelection(null);
+      }
+      return;
+    }
+    void commit(region);
+  };
+
+  // ── Keyboard ──────────────────────────────────────────────────────────
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+
       if (event.key === "Escape") {
         event.preventDefault();
-        cancel();
+        // Escape backs out of a tool first; only then does it cancel, so a
+        // mis-picked tool does not cost the whole capture.
+        if (tool) setTool(null);
+        else cancel();
+        return;
+      }
+      if (mod && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        setShapes((current) => renumberSteps(current.slice(0, -1)));
         return;
       }
       if (event.key === "Enter" && selection) {
@@ -126,13 +323,18 @@ export default function Overlay({ origin, size }: OverlayProps) {
         return;
       }
       if (event.key === " " || event.code === "Space") {
-        // Space captures the whole display, matching ShareX.
         event.preventDefault();
         void commit({ x: 0, y: 0, width: size.width, height: size.height });
         return;
       }
 
-      // Arrow keys nudge the committed selection: 1px, or 10px with shift.
+      const match = OVERLAY_TOOLS.find((t) => t.key === event.key.toLowerCase());
+      if (match && !mod) {
+        event.preventDefault();
+        setTool(match.id === "select" ? null : match.id);
+        return;
+      }
+
       if (selection && event.key.startsWith("Arrow")) {
         event.preventDefault();
         const step = event.shiftKey ? 10 : 1;
@@ -141,7 +343,6 @@ export default function Overlay({ origin, size }: OverlayProps) {
 
         setSelection((current) => {
           if (!current) return current;
-          // Alt resizes from the bottom-right; plain arrows move.
           if (event.altKey) {
             return {
               ...current,
@@ -156,81 +357,25 @@ export default function Overlay({ origin, size }: OverlayProps) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cancel, commit, selection, size]);
-
-  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button === 2) {
-      cancel();
-      return;
-    }
-    const point = { x: event.clientX, y: event.clientY };
-    setAnchor(point);
-    setSelection({ x: point.x, y: point.y, width: 0, height: 0 });
-    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
-  };
-
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const point = { x: event.clientX, y: event.clientY };
-    setCursor(point);
-
-    if (anchor) {
-      let next = rectFromPoints(anchor, point);
-      // Shift constrains to a square, matching ShareX's proportional resize.
-      if (event.shiftKey) {
-        const edge = Math.max(next.width, next.height);
-        next = {
-          x: point.x < anchor.x ? anchor.x - edge : anchor.x,
-          y: point.y < anchor.y ? anchor.y - edge : anchor.y,
-          width: edge,
-          height: edge,
-        };
-      }
-      setSelection(next);
-      setHovered(null);
-    } else {
-      setHovered(windowAt(point));
-    }
-  };
-
-  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!anchor) return;
-    const point = { x: event.clientX, y: event.clientY };
-    const region = rectFromPoints(anchor, point);
-    setAnchor(null);
-
-    const isClick = region.width < CLICK_THRESHOLD && region.height < CLICK_THRESHOLD;
-    if (isClick) {
-      // A click with no drag means "capture the window under the cursor".
-      const target = windowAt(point);
-      if (target) {
-        void commit(toLocal(target.region));
-      } else {
-        setSelection(null);
-      }
-      return;
-    }
-
-    void commit(region);
-  };
+  }, [cancel, commit, selection, size, tool]);
 
   const highlight = hovered ? toLocal(hovered.region) : null;
   const active = selection ?? highlight;
 
   return (
     <div
-      className="overlay"
+      className={`overlay ${tool ? "overlay--drawing" : ""}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       onContextMenu={(event) => event.preventDefault()}
       role="application"
       aria-label="Bölge seçimi"
     >
-      {/* Dimming drawn as four rectangles around the selection, so the
-          selected area stays at full brightness without a mask. */}
       {active ? (
         <>
-          <div className="overlay__dim" style={{ inset: `0 0 auto 0`, height: active.y }} />
+          <div className="overlay__dim" style={{ inset: "0 0 auto 0", height: active.y }} />
           <div
             className="overlay__dim"
             style={{ top: active.y + active.height, left: 0, right: 0, bottom: 0 }}
@@ -241,19 +386,21 @@ export default function Overlay({ origin, size }: OverlayProps) {
           />
           <div
             className="overlay__dim"
-            style={{
-              top: active.y,
-              left: active.x + active.width,
-              right: 0,
-              height: active.height,
-            }}
+            style={{ top: active.y, left: active.x + active.width, right: 0, height: active.height }}
           />
         </>
       ) : (
         <div className="overlay__dim" style={{ inset: 0 }} />
       )}
 
-      {!anchor && !selection && (
+      <canvas
+        ref={canvasRef}
+        className="overlay__canvas"
+        width={size.width}
+        height={size.height}
+      />
+
+      {!anchor && !selection && !tool && (
         <>
           <div className="overlay__crosshair overlay__crosshair--h" style={{ top: cursor.y }} />
           <div className="overlay__crosshair overlay__crosshair--v" style={{ left: cursor.x }} />
@@ -263,12 +410,7 @@ export default function Overlay({ origin, size }: OverlayProps) {
       {active && (
         <div
           className={`overlay__selection ${hovered && !selection ? "overlay__selection--snap" : ""}`}
-          style={{
-            left: active.x,
-            top: active.y,
-            width: active.width,
-            height: active.height,
-          }}
+          style={{ left: active.x, top: active.y, width: active.width, height: active.height }}
         >
           {!hovered || selection ? (
             <>
@@ -295,18 +437,26 @@ export default function Overlay({ origin, size }: OverlayProps) {
         </div>
       )}
 
-      <div className="overlay__hint">
-        {busy ? (
+      {busy ? (
+        <div className="overlay__hint">
           <span>Yakalanıyor…</span>
-        ) : (
-          <>
-            <span>Sürükle: bölge seç</span>
-            <span>Tıkla: pencereyi yakala</span>
-            <span>Space: tüm ekran</span>
-            <span>Esc: iptal</span>
-          </>
-        )}
-      </div>
+        </div>
+      ) : (
+        <OverlayToolbar
+          tool={tool}
+          color={color}
+          width={strokeWidth}
+          canUndo={shapes.length > 0}
+          onTool={setTool}
+          onColor={setColor}
+          onWidth={setStrokeWidth}
+          onUndo={() => setShapes((current) => renumberSteps(current.slice(0, -1)))}
+          onCancel={cancel}
+          onConfirm={() =>
+            void commit(selection ?? { x: 0, y: 0, width: size.width, height: size.height })
+          }
+        />
+      )}
     </div>
   );
 }
