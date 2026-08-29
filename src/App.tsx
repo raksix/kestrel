@@ -7,6 +7,7 @@ import ShortcutSettings from "./features/settings/ShortcutSettings";
 import TaskChain from "./features/settings/TaskChain";
 import { openEditor } from "./lib/editorTypes";
 import { pinLastCapture } from "./lib/ipc";
+import AudioPicker from "./features/record/AudioPicker";
 import RecordingBar from "./features/record/RecordingBar";
 import {
   formatShortcut,
@@ -176,12 +177,15 @@ export default function App() {
             )}
 
             {section === "capture" && (
-              <CapturePanel
-                workflows={workflows}
-                capabilities={capabilities}
-                busy={busy}
-                onRun={run}
-              />
+              <>
+                <CapturePanel
+                  workflows={workflows}
+                  capabilities={capabilities}
+                  busy={busy}
+                  onRun={run}
+                />
+                <AudioPicker />
+              </>
             )}
             {section === "shortcuts" && (
               <>

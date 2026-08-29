@@ -67,3 +67,18 @@
   font-size: var(--text-xs);
   color: var(--text-danger, var(--danger));
 }
+
+/* ── Audio picker ───────────────────────────────────────────────────── */
+
+.record__field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.record__field > span:first-child {
+  min-width: 5rem;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}

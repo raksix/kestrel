@@ -962,8 +962,13 @@ pub fn start_recording(
     gif: Option<bool>,
     settings: State<'_, SettingsState>,
 ) -> Result<crate::record::RecordingStatus, String> {
-    let defaults = settings.snapshot().defaults;
-    start_recording_inner(&app, gif.unwrap_or(false), &defaults)
+    let snapshot = settings.snapshot();
+    start_recording_inner(
+        &app,
+        gif.unwrap_or(false),
+        &snapshot.defaults,
+        &snapshot.audio,
+    )
 }
 
 /// Shared by the command, the tray and the shortcut dispatch.
@@ -974,6 +979,7 @@ fn start_recording_inner(
     app: &AppHandle,
     gif: bool,
     settings: &TaskSettings,
+    audio: &kestrel_record::AudioSettings,
 ) -> Result<crate::record::RecordingStatus, String> {
     require_permission()?;
 
@@ -983,6 +989,7 @@ fn start_recording_inner(
         } else {
             kestrel_record::OutputFormat::Video
         },
+        audio: audio.clone(),
         ..Default::default()
     };
 
@@ -1234,7 +1241,8 @@ pub fn dispatch(
                 );
             } else {
                 let gif = matches!(method, M::ScreenRecordingGif);
-                start_recording_inner(app, gif, settings)?;
+                let audio = app.state::<SettingsState>().snapshot().audio;
+                start_recording_inner(app, gif, settings, &audio)?;
             }
             Ok(None)
         }
@@ -1557,4 +1565,50 @@ pub fn set_watch(
 
     let directory = directory.ok_or_else(|| crate::watch::WatchError::NoDirectory.to_string())?;
     crate::watch::start(&app, std::path::Path::new(&directory)).map_err(err)
+}
+
+// ── Recording audio ─────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioOptions {
+    pub devices: Vec<kestrel_record::AudioDevice>,
+    pub selected: Option<String>,
+    pub bitrate_kbps: u32,
+    /// Set on platforms where recording the system's own output needs extra
+    /// software, with an explanation to show the user.
+    pub system_audio_note: Option<&'static str>,
+}
+
+/// The audio inputs ffmpeg can see, and what is currently chosen.
+#[tauri::command]
+pub fn audio_options(settings: State<'_, SettingsState>) -> Result<AudioOptions, String> {
+    let ffmpeg = kestrel_record::ffmpeg::find()
+        .ok_or_else(|| kestrel_record::ffmpeg::FfmpegError::NotFound.to_string())?;
+    let chosen = settings.snapshot().audio;
+
+    Ok(AudioOptions {
+        devices: kestrel_record::audio::devices(&ffmpeg),
+        selected: chosen.device.clone(),
+        bitrate_kbps: chosen.bitrate(),
+        system_audio_note: kestrel_record::audio::system_audio_note(),
+    })
+}
+
+/// Choose the audio input for recordings, or `None` for silence.
+#[tauri::command]
+pub fn set_audio(
+    device: Option<String>,
+    bitrate_kbps: Option<u32>,
+    settings: State<'_, SettingsState>,
+) -> Result<(), String> {
+    settings
+        .update(|state| {
+            state.audio.device = device.clone().filter(|d| !d.trim().is_empty());
+            if let Some(bitrate) = bitrate_kbps {
+                state.audio.bitrate_kbps = bitrate;
+            }
+            Ok(())
+        })
+        .map_err(err)
 }

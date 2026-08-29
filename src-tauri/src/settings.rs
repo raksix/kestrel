@@ -25,12 +25,16 @@ pub struct AppSettings {
     /// the app rather than having to be switched on every launch.
     #[serde(default)]
     pub watch: crate::watch::WatchSettings,
+    /// Audio to mix into recordings. Silent unless a device is chosen.
+    #[serde(default)]
+    pub audio: kestrel_record::AudioSettings,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             version: 1,
+            audio: kestrel_record::AudioSettings::default(),
             watch: crate::watch::WatchSettings::default(),
             workflows: default_workflows(),
             defaults: TaskSettings::default(),

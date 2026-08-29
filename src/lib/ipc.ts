@@ -288,6 +288,27 @@ export interface FfmpegStatus {
 
 export const ffmpegStatus = () => invoke<FfmpegStatus>("ffmpeg_status");
 
+// ── Recording audio ─────────────────────────────────────────────────────
+
+export interface AudioDevice {
+  id: string;
+  name: string;
+  /** A guess from the name that this carries system output, for sorting only. */
+  likelyLoopback: boolean;
+}
+
+export interface AudioOptions {
+  devices: AudioDevice[];
+  selected: string | null;
+  bitrateKbps: number;
+  /** Set where recording system output needs extra software, with the reason. */
+  systemAudioNote: string | null;
+}
+
+export const audioOptions = () => invoke<AudioOptions>("audio_options");
+export const setAudio = (device: string | null, bitrateKbps?: number) =>
+  invoke<void>("set_audio", { device, bitrateKbps });
+
 // ── Video tools ─────────────────────────────────────────────────────────
 
 export type ConvertTarget = "mp4" | "webm" | "mkv" | "gif" | "mp3";

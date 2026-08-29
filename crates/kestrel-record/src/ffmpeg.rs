@@ -59,6 +59,9 @@ pub struct RecordSettings {
     /// Constant rate factor. Lower is better quality and a bigger file.
     pub crf: u8,
     pub format: OutputFormat,
+    /// Audio to mix in. Silent by default — see `audio::AudioSettings`.
+    #[serde(default)]
+    pub audio: crate::audio::AudioSettings,
 }
 
 impl Default for RecordSettings {
@@ -68,6 +71,7 @@ impl Default for RecordSettings {
             codec: VideoCodec::H264,
             crf: 23,
             format: OutputFormat::Video,
+            audio: crate::audio::AudioSettings::default(),
         }
     }
 }
@@ -159,6 +163,12 @@ pub fn encode_args(
         "-".into(),
     ];
 
+    // The audio input is a second `-i`, so it goes after the video input and
+    // before any encoder option. A GIF has no audio stream to put it in.
+    if settings.format == OutputFormat::Video {
+        args.extend(crate::audio::input_args(&settings.audio));
+    }
+
     match settings.format {
         OutputFormat::Gif => {
             // One pass: generate a palette from the whole clip and apply it.
@@ -202,6 +212,10 @@ pub fn encode_args(
         }
     }
 
+    if settings.format == OutputFormat::Video {
+        args.extend(crate::audio::encode_args(&settings.audio));
+    }
+
     args.push(output.to_string_lossy().into_owned());
     args
 }
@@ -211,6 +225,74 @@ const EVEN_DIMENSIONS: &str = "scale=trunc(iw/2)*2:trunc(ih/2)*2";
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_silent_recording_mentions_no_audio_at_all() {
+        // The default has to stay silent, and the absence has to be total: a
+        // stray -c:a with no input makes ffmpeg fail rather than record.
+        let args = encode_args(
+            640,
+            480,
+            &RecordSettings::default(),
+            std::path::Path::new("/out.mp4"),
+        )
+        .join(" ");
+
+        assert!(!args.contains("-c:a"), "{args}");
+        assert!(!args.contains("avfoundation"), "{args}");
+    }
+
+    #[test]
+    fn the_audio_input_comes_after_the_video_input_and_before_the_output() {
+        // ffmpeg reads options positionally. An -i after the encoder options,
+        // or after the output path, is a different command entirely.
+        let settings = RecordSettings {
+            audio: crate::audio::AudioSettings {
+                device: Some("mic".into()),
+                bitrate_kbps: 128,
+            },
+            ..Default::default()
+        };
+        let args = encode_args(640, 480, &settings, std::path::Path::new("/out.mp4"));
+
+        let inputs: Vec<usize> = args
+            .iter()
+            .enumerate()
+            .filter(|(_, arg)| *arg == "-i")
+            .map(|(i, _)| i)
+            .collect();
+        let codec = args
+            .iter()
+            .position(|a| a == "-c:v")
+            .expect("a video codec");
+        let output = args.len() - 1;
+
+        assert_eq!(
+            inputs.len(),
+            2,
+            "one raw video input and one audio: {args:?}"
+        );
+        assert!(inputs[1] < codec, "{args:?}");
+        assert!(codec < output, "{args:?}");
+    }
+
+    #[test]
+    fn a_gif_never_gets_an_audio_stream_even_when_one_is_configured() {
+        // A GIF cannot carry sound, and asking ffmpeg to put it there fails.
+        let settings = RecordSettings {
+            format: OutputFormat::Gif,
+            audio: crate::audio::AudioSettings {
+                device: Some("mic".into()),
+                bitrate_kbps: 128,
+            },
+            ..Default::default()
+        };
+        let args = encode_args(640, 480, &settings, std::path::Path::new("/out.gif")).join(" ");
+
+        assert!(!args.contains("-c:a"), "{args}");
+        assert!(!args.contains("mic"), "{args}");
+    }
+
     use super::*;
     use std::path::Path;
 
@@ -355,6 +437,10 @@ mod tests {
             codec: VideoCodec::Hevc,
             crf: 18,
             format: OutputFormat::Gif,
+            audio: crate::audio::AudioSettings {
+                device: Some("mic".into()),
+                bitrate_kbps: 160,
+            },
         };
         let json = serde_json::to_string(&settings).unwrap();
         assert_eq!(

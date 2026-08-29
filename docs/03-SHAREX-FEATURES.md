@@ -520,7 +520,7 @@ duyuruyor.
 | Genel | Başlangıçta aç, tepsi, tema, dil, güncelleme | `[ ]` faz 6 |
 | Kısayollar | Tüm workflow kısayolları + çakışma tespiti | `[x]` faz 1 |
 | Yakalama | Overlay davranışı, imleç, gecikme, ses | `[ ]` faz 2 |
-| Kayıt | Codec, fps, kalite, ses, imleç efektleri | `[ ]` faz 4 |
+| Kayıt | Codec, fps, kalite, ses | `[x]` faz 4 · imleç efektleri kaldı |
 | Editör | Varsayılan araç, renkler, font, davranışlar | `[ ]` faz 2 |
 | Hedefler | Servis listesi + yapılandırma + custom uploader | `[~]` faz 3 |
 | Dosyalar | Kaydetme yeri, adlandırma, format, kalite | `[~]` faz 1 |

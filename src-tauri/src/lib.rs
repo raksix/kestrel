@@ -123,6 +123,8 @@ pub fn run() {
             commands::stop_recording,
             commands::cancel_recording,
             commands::set_recording_paused,
+            commands::audio_options,
+            commands::set_audio,
             commands::scan_qr_code,
             commands::generate_qr_code,
             commands::hash_file,
