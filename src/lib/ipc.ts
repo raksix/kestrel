@@ -314,6 +314,31 @@ export const compareHash = (expected: string, actual: string) =>
   invoke<boolean>("compare_hash", { expected, actual });
 export const analyzeLastCapture = () => invoke<Analysis>("analyze_last_capture");
 
+// ── OCR ─────────────────────────────────────────────────────────────────
+
+export interface OcrModelStatus {
+  installed: boolean;
+  directory: string;
+  downloadSizeMb: number;
+}
+
+export interface OcrLine {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface Recognised {
+  text: string;
+  lines: OcrLine[];
+}
+
+export const ocrStatus = () => invoke<OcrModelStatus>("ocr_status");
+export const ocrInstall = () => invoke<OcrModelStatus>("ocr_install");
+export const ocrLastCapture = () => invoke<Recognised>("ocr_last_capture");
+
 // ── Events ──────────────────────────────────────────────────────────────
 export const onCaptureComplete = (handler: (output: CaptureOutput) => void): Promise<UnlistenFn> =>
   listen<CaptureOutput>(CAPTURE_COMPLETE, (event) => handler(event.payload));

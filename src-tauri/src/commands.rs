@@ -1076,3 +1076,28 @@ pub fn dispatch_from_app(
     let settings = app.state::<SettingsState>().snapshot().defaults;
     dispatch(app, method, &settings)
 }
+
+// ── OCR ─────────────────────────────────────────────────────────────────
+
+/// Whether the OCR models are installed, and what installing them would cost.
+///
+/// The UI asks this before offering OCR so it can say "this downloads 20 MB"
+/// rather than stalling on a silent fetch.
+#[tauri::command]
+pub fn ocr_status(app: AppHandle) -> crate::ocr::ModelStatus {
+    crate::ocr::status(&app)
+}
+
+/// Download the OCR models. Only called once the user has agreed to it.
+#[tauri::command]
+pub async fn ocr_install(app: AppHandle) -> Result<crate::ocr::ModelStatus, String> {
+    crate::ocr::install(&app).await.map_err(err)
+}
+
+/// Read the text in the most recent capture.
+///
+/// Recognition runs locally; nothing leaves the machine.
+#[tauri::command]
+pub fn ocr_last_capture(app: AppHandle) -> Result<kestrel_tools::ocr::Recognised, String> {
+    crate::ocr::read_last(&app).map_err(err)
+}

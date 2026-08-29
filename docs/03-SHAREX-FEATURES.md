@@ -222,7 +222,7 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | 16 | Dosya yöneticisinde göster | `[ ]` | 2 |
 | 17 | Görseli analiz et | `[x]` | 5 |
 | 18 | QR kodu tara | `[x]` | 5 |
-| 19 | Metin tanı (OCR) | `[ ]` | 5 |
+| 19 | Metin tanı (OCR) | `[x]` | 5 |
 | 20 | "Yükleme öncesi" penceresini göster | `[ ]` | 3 |
 | 21 | Görseli yükle | `[~]` | 3 | custom uploader üzerinden çalışıyor |
 | 22 | Dosyayı yerelden sil | `[ ]` | 3 |
@@ -397,7 +397,7 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | 14 | Video dönüştürücü | `[ ]` | 4 | ffmpeg ön ayarları |
 | 15 | Video küçük resmi | `[ ]` | 4 | Zaman damgalı ızgara |
 | 16 | Görsel analizi | `[x]` | 5 | Boyut, format, histogram, baskın renkler, EXIF |
-| 17 | OCR | `[ ]` | 5 | `ocrs` + opsiyonel native motor |
+| 17 | OCR | `[x]` | 5 | `ocrs`, modeller ilk kullanımda indirilir |
 | 18 | QR kod (oluştur + tara) | `[x]` | 5 | konum bilgisiyle |
 | 19 | Hash kontrolü | `[ ]` | 5 | MD5/SHA1/SHA256/SHA512 |
 | 20 | Metadata | `[x]` | 5 | EXIF görüntüle + temizle |
@@ -497,7 +497,7 @@ Tümü faz 6.
 | Tarihe göre bölümleme | `[ ]` | 3 |
 | Filtreler (tür, hedef, tarih, yüklendi mi) | `[ ]` | 3 |
 | Tam metin arama | `[ ]` | 3 |
-| OCR metninde arama | `[ ]` | 5 |
+| OCR metninde arama | `[x]` | 5 |
 | Toplu işlemler | `[ ]` | 3 |
 | Sürükle-bırak dışa aktarma | `[ ]` | 3 |
 | Hızlı önizleme | `[ ]` | 3 |
@@ -547,7 +547,7 @@ Tümü faz 6.
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
-| Araçlar | 25 | 8 | 0 | 17 |
+| Araçlar | 25 | 9 | 0 | 16 |
 | Workflow / otomasyon | 25 | 7 | 1 | 17 |
 | Geçmiş | 10 | 5 | 2 | 3 |
 | Ayarlar | 10 | 1 | 2 | 7 |

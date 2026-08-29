@@ -43,6 +43,9 @@ dirs = "6"
 # Bundled SQLite so history does not depend on what the host has installed.
 rusqlite = { version = "0.37", features = ["bundled"] }
 base64 = "0.22"
+# Only for fetching the OCR models. Same TLS stack as kestrel-upload, so this
+# adds no new build dependency.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"

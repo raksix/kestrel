@@ -133,13 +133,11 @@ impl History {
         Ok(())
     }
 
-    /// Attach recognised text to a capture.
+    /// Attach recognised text to a capture, so it turns up in a search.
     ///
-    /// Test-only until the OCR tool exists to call it. The column and the
-    /// search that reads it are real and covered; shipping a public writer with
-    /// no caller would just be dead weight.
-    #[cfg(test)]
-    fn record_ocr(&self, id: i64, text: &str) -> Result<()> {
+    /// This is what makes a screenshot of a receipt findable by typing what was
+    /// on the receipt.
+    pub fn record_ocr(&self, id: i64, text: &str) -> Result<()> {
         let connection = self.0.lock().expect("history mutex poisoned");
         connection.execute(
             "UPDATE captures SET ocr_text = ?2 WHERE id = ?1",

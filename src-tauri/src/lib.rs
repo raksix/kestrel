@@ -8,6 +8,7 @@ mod capture_service;
 mod commands;
 mod editor;
 mod history;
+mod ocr;
 mod overlay;
 mod pin;
 mod record;
@@ -56,6 +57,7 @@ pub fn run() {
         .manage(editor::LastCapture::default())
         .manage(history::History::open())
         .manage(history::LastEntryId::default())
+        .manage(ocr::OcrState::default())
         .manage(record::RecordState::default())
         .manage(shortcuts::ShortcutRegistry::default())
         .invoke_handler(tauri::generate_handler![
@@ -94,6 +96,9 @@ pub fn run() {
             commands::editor_export,
             commands::editor_set_effects,
             commands::import_sxie,
+            commands::ocr_status,
+            commands::ocr_install,
+            commands::ocr_last_capture,
             commands::list_destinations,
             commands::import_uploader,
             commands::remove_uploader,

@@ -8,6 +8,7 @@ pub mod analyze;
 pub mod hash;
 pub mod indexer;
 pub mod metadata;
+pub mod ocr;
 pub mod qr;
 
 pub use analyze::{analyze, combine, split, thumbnail, Analysis, Direction};

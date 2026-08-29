@@ -5,10 +5,15 @@ import {
   compareHash,
   generateQrCode,
   hashFile,
+  ocrInstall,
+  ocrLastCapture,
+  ocrStatus,
   scanQrCode,
   type Analysis,
   type DecodedQr,
   type FileHash,
+  type OcrModelStatus,
+  type Recognised,
 } from "../../lib/ipc";
 import "./tools.css";
 
@@ -16,6 +21,7 @@ export default function Tools() {
   return (
     <div className="stack">
       <QrTool />
+      <OcrTool />
       <HashTool />
       <AnalyzeTool />
     </div>
@@ -267,6 +273,108 @@ function AnalyzeTool() {
             </span>
           </li>
         </ul>
+      )}
+    </section>
+  );
+}
+
+
+/**
+ * ShareX's OCR, minus the Windows OCR API.
+ *
+ * The models are a 20 MB download, so this says so and waits to be told rather
+ * than reaching out to the network the first time someone clicks the button.
+ */
+function OcrTool() {
+  const [status, setStatus] = useState<OcrModelStatus | null>(null);
+  const [result, setResult] = useState<Recognised | null>(null);
+  const [busy, setBusy] = useState<"install" | "read" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    ocrStatus().then(setStatus).catch((e) => setError(String(e)));
+  }, []);
+
+  const install = async () => {
+    setBusy("install");
+    setError(null);
+    try {
+      setStatus(await ocrInstall());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const read = async () => {
+    setBusy("read");
+    setError(null);
+    try {
+      setResult(await ocrLastCapture());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="card">
+      <h2 className="card__title">Metin tanıma (OCR)</h2>
+      <p className="card__hint">
+        Son yakalamadaki metni oku. Tanıma tamamen bu makinede çalışır, görsel
+        hiçbir yere gönderilmez.
+      </p>
+
+      {status && !status.installed && (
+        <>
+          <p className="card__hint">
+            Modeller kurulu değil. Kurulum yaklaşık {status.downloadSizeMb} MB
+            indirir; bu tek seferlik ve indirmeyi sen başlatana kadar ağa
+            çıkılmaz.
+          </p>
+          <button
+            type="button"
+            className="button button--primary"
+            disabled={busy !== null}
+            onClick={install}
+          >
+            {busy === "install" ? "İndiriliyor…" : "Modelleri indir"}
+          </button>
+        </>
+      )}
+
+      {status?.installed && (
+        <button
+          type="button"
+          className="button button--primary"
+          disabled={busy !== null}
+          onClick={read}
+        >
+          {busy === "read" ? "Okunuyor…" : "Son yakalamayı oku"}
+        </button>
+      )}
+
+      {result && result.lines.length === 0 && (
+        <p className="card__hint">Görselde okunabilir metin bulunamadı.</p>
+      )}
+
+      {result && result.lines.length > 0 && (
+        <>
+          <textarea className="input" readOnly rows={8} value={result.text} />
+          <p className="card__hint">
+            {result.lines.length} satır tanındı. Metin geçmişe de yazıldı, artık
+            kütüphanede aratabilirsin.
+          </p>
+        </>
+      )}
+
+      {error && (
+        <p className="status status--error" role="alert">
+          <span className="dot" aria-hidden="true" />
+          {error}
+        </p>
       )}
     </section>
   );

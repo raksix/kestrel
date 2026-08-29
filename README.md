@@ -2,10 +2,10 @@
 
 Cross-platform capture, annotation and sharing — a ShareX-class tool for macOS, Windows and Linux.
 
-> **Status: early development.** Capture, annotation and `.sxcu` uploading work.
-> Screen recording, OCR and most of the standalone tools do not exist yet — see
-> the roadmap. Usable for taking and marking up screenshots; not yet a
-> replacement for ShareX.
+> **Status: early development.**
+> Capture, annotation, image effects, recording, OCR and `.sxcu` uploading
+> work. Most of the standalone tools and the phase 6 integrations do not exist
+> yet — see the roadmap.
 
 ## Why
 
@@ -74,6 +74,9 @@ that language exactly, so those files work unmodified.
 - Metadata viewer that flags what identifies a person, place or device, and a
   stripper that writes a clean copy rather than touching the original
 - Directory indexing to HTML, text, JSON or XML
+- OCR: read the text out of a capture and search for it later. Recognition
+  runs locally, so nothing is sent anywhere. The ~20 MB models are downloaded
+  on first use, and only after you say so
 
 **Organise**
 - Capture history in SQLite, searchable by filename, window title, URL and
@@ -98,7 +101,7 @@ not capped at screen resolution.
 | 2 | Annotation editor, framing, pin to screen, post-capture card | ✅ |
 | 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
 | 4 | Screen recording, GIF, video tools | 🚧 audio and video tools left |
-| 5 | The remaining tools, effect chain, OCR | 🚧 effects done, six tools done |
+| 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, seven tools done |
 | 6 | CLI, integrations, scrolling capture, 1.0 | ⏳ |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·
@@ -125,7 +128,7 @@ work around.
 
 ## Building
 
-Requires [Rust](https://rustup.rs) 1.82+ and Node.js 22 (see `.nvmrc`).
+Requires [Rust](https://rustup.rs) 1.89+ and Node.js 22 (see `.nvmrc`).
 
 ```bash
 npm install
@@ -156,7 +159,9 @@ window list. Kestrel detects this and says so instead of appearing broken.
 ```
 crates/kestrel-core      domain model, workflows, filename tokens (no UI, no Tauri)
 crates/kestrel-capture   platform capture backends behind one trait
-crates/kestrel-editor    annotation model, history, and the export renderer
+crates/kestrel-editor    annotation model, effects, history, export renderer
+crates/kestrel-record    ffmpeg discovery and the recording frame pump
+crates/kestrel-tools     QR, hashing, analysis, metadata, indexing, OCR
 crates/kestrel-upload    .sxcu template engine, file format, HTTP transport
 src-tauri                desktop shell: tray, shortcuts, windows, history, IPC
 src                      React UI: main window, overlay, picker, editor
