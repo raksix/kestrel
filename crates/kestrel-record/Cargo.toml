@@ -1,0 +1,17 @@
+[package]
+name = "kestrel-record"
+description = "Screen recording for Kestrel: platform frames encoded through ffmpeg"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+kestrel-capture.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+xcap.workspace = true

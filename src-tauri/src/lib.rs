@@ -10,6 +10,7 @@ mod editor;
 mod history;
 mod overlay;
 mod pin;
+mod record;
 mod settings;
 mod shortcuts;
 mod uploads;
@@ -29,6 +30,8 @@ pub const EVENT_CAPTURE_FAILED: &str = "kestrel://capture-failed";
 pub const EVENT_SHORTCUTS_CHANGED: &str = "kestrel://shortcuts-changed";
 /// Emitted when an upload finishes, so any window can show the resulting URL.
 pub const EVENT_UPLOAD_COMPLETE: &str = "kestrel://upload-complete";
+/// Emitted whenever recording starts, stops or is paused.
+pub const EVENT_RECORDING_CHANGED: &str = "kestrel://recording-changed";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -51,6 +54,7 @@ pub fn run() {
         .manage(editor::LastCapture::default())
         .manage(history::History::open())
         .manage(history::LastEntryId::default())
+        .manage(record::RecordState::default())
         .manage(shortcuts::ShortcutRegistry::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_displays,
@@ -100,6 +104,12 @@ pub fn run() {
             commands::history_count,
             commands::pin_last_capture,
             commands::close_pin,
+            commands::ffmpeg_status,
+            commands::recording_status,
+            commands::start_recording,
+            commands::stop_recording,
+            commands::cancel_recording,
+            commands::set_recording_paused,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
@@ -148,6 +158,20 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let record = MenuItem::with_id(
+        app,
+        "record",
+        "Ekran kaydı başlat/durdur",
+        true,
+        None::<&str>,
+    )?;
+    let record_gif = MenuItem::with_id(
+        app,
+        "record-gif",
+        "GIF kaydı başlat/durdur",
+        true,
+        None::<&str>,
+    )?;
     let pin_last = MenuItem::with_id(app, "pin-last", "Ekrana sabitle", true, None::<&str>)?;
     let library = MenuItem::with_id(app, "open-library", "Kestrel'i aç…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Kestrel'den çık", true, None::<&str>)?;
@@ -160,6 +184,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &window_menu,
             &active_window,
             &monitor_menu,
+            &PredefinedMenuItem::separator(app)?,
+            &record,
+            &record_gif,
             &PredefinedMenuItem::separator(app)?,
             &edit_last,
             &pin_last,
@@ -185,6 +212,8 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             "capture-window" => run_in_background(app, CaptureMethod::WindowMenu),
             "capture-active-window" => run_in_background(app, CaptureMethod::ActiveWindow),
             "capture-monitor" => run_in_background(app, CaptureMethod::MonitorMenu),
+            "record" => run_in_background(app, CaptureMethod::ScreenRecording),
+            "record-gif" => run_in_background(app, CaptureMethod::ScreenRecordingGif),
             "edit-last" => open_editor(app),
             "pin-last" => pin_last_capture(app),
             "open-library" => show_main_window(app),

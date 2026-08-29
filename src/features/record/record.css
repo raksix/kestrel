@@ -1,0 +1,69 @@
+.recording {
+  position: fixed;
+  inset-inline-end: var(--space-6);
+  inset-block-end: var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-popover);
+}
+
+.recording--missing {
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.recording__hint {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+
+.recording__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--record);
+  animation: recording-pulse 1.6s ease-in-out infinite;
+}
+
+/* Paused stops the pulse rather than hiding the dot: something is still being
+   recorded to, and the indicator should not imply otherwise. */
+.recording__dot--paused {
+  animation: none;
+  opacity: 0.45;
+}
+
+@keyframes recording-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.recording__time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  min-width: 42px;
+}
+
+.recording .button {
+  min-height: 24px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.recording__error {
+  font-size: var(--text-xs);
+  color: var(--text-danger, var(--danger));
+}

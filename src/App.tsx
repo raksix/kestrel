@@ -5,6 +5,7 @@ import PermissionGate from "./features/settings/PermissionGate";
 import ShortcutSettings from "./features/settings/ShortcutSettings";
 import { openEditor } from "./lib/editorTypes";
 import { pinLastCapture } from "./lib/ipc";
+import RecordingBar from "./features/record/RecordingBar";
 import {
   formatShortcut,
   getSettings,
@@ -49,8 +50,6 @@ const METHOD_LABEL: Record<string, string> = {
 
 /** Features that exist in the model but are not built yet (see docs/00-PLAN.md). */
 const NOT_YET_BUILT = new Set([
-  "screen_recording",
-  "screen_recording_gif",
   "scrolling_capture",
   "last_region",
   "custom_region",
@@ -187,6 +186,7 @@ export default function App() {
         </div>
       </main>
 
+      <RecordingBar />
       {latest && <CaptureCard output={latest} onDismiss={() => setLatest(null)} />}
     </div>
   );

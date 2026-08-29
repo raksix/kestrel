@@ -718,6 +718,120 @@ pub fn close_pin(app: AppHandle, label: String) {
     crate::pin::close(&app, &label);
 }
 
+// ── Recording ───────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn ffmpeg_status() -> crate::record::FfmpegStatus {
+    crate::record::ffmpeg_status()
+}
+
+#[tauri::command]
+pub fn recording_status(app: AppHandle) -> crate::record::RecordingStatus {
+    app.state::<crate::record::RecordState>().status()
+}
+
+#[tauri::command]
+pub fn start_recording(
+    app: AppHandle,
+    gif: Option<bool>,
+    settings: State<'_, SettingsState>,
+) -> Result<crate::record::RecordingStatus, String> {
+    let defaults = settings.snapshot().defaults;
+    start_recording_inner(&app, gif.unwrap_or(false), &defaults)
+}
+
+/// Shared by the command, the tray and the shortcut dispatch.
+///
+/// Recordings land beside screenshots and follow the same naming pattern, so
+/// one folder and one convention cover everything Kestrel produces.
+fn start_recording_inner(
+    app: &AppHandle,
+    gif: bool,
+    settings: &TaskSettings,
+) -> Result<crate::record::RecordingStatus, String> {
+    require_permission()?;
+
+    let record_settings = kestrel_record::RecordSettings {
+        format: if gif {
+            kestrel_record::OutputFormat::Gif
+        } else {
+            kestrel_record::OutputFormat::Video
+        },
+        ..Default::default()
+    };
+
+    let now = chrono::Local::now();
+    let directory = match &settings.output_directory {
+        Some(dir) => std::path::PathBuf::from(dir),
+        None => dirs::picture_dir()
+            .or_else(dirs::home_dir)
+            .ok_or("Kayıt klasörü bulunamadı.")?
+            .join("Kestrel"),
+    }
+    .join(now.format("%Y").to_string())
+    .join(now.format("%m").to_string());
+
+    let ctx = NameContext {
+        datetime: now,
+        ..Default::default()
+    };
+    let stem = {
+        let expanded = name_pattern::expand_sanitized(&settings.filename_pattern, &ctx);
+        if expanded.trim().is_empty() {
+            now.format("%Y-%m-%d_%H-%M-%S").to_string()
+        } else {
+            expanded
+        }
+    };
+
+    let status = crate::record::start(
+        &app.state::<crate::record::RecordState>(),
+        None,
+        None,
+        &record_settings,
+        &directory,
+        &stem,
+    )
+    .map_err(err)?;
+
+    let _ = app.emit(crate::EVENT_RECORDING_CHANGED, status.clone());
+    Ok(status)
+}
+
+#[tauri::command]
+pub fn stop_recording(app: AppHandle) -> Result<String, String> {
+    let path = crate::record::stop(&app.state::<crate::record::RecordState>()).map_err(err)?;
+    let path = path.to_string_lossy().into_owned();
+    tracing::info!(%path, "recording finished");
+
+    let _ = app.emit(
+        crate::EVENT_RECORDING_CHANGED,
+        app.state::<crate::record::RecordState>().status(),
+    );
+    Ok(path)
+}
+
+#[tauri::command]
+pub fn cancel_recording(app: AppHandle) -> Result<(), String> {
+    crate::record::cancel(&app.state::<crate::record::RecordState>()).map_err(err)?;
+    let _ = app.emit(
+        crate::EVENT_RECORDING_CHANGED,
+        app.state::<crate::record::RecordState>().status(),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_recording_paused(
+    app: AppHandle,
+    paused: bool,
+) -> Result<crate::record::RecordingStatus, String> {
+    let status = crate::record::set_paused(&app.state::<crate::record::RecordState>(), paused)
+        .map_err(err)?;
+    let _ = app.emit(crate::EVENT_RECORDING_CHANGED, status.clone());
+    Ok(status)
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────
 
 /// Run a workflow by id. Interactive methods open their own UI; direct ones
@@ -787,10 +901,20 @@ pub fn dispatch(
             finish_capture(app, capture, settings).map(Some)
         }
 
-        // Not built yet. Say so plainly rather than quietly doing something
-        // else — a screenshot of the whole screen is not a screen recording.
+        // The shortcut toggles: pressing it again is how a recording started
+        // by a shortcut gets stopped, since there is no window to click.
         M::ScreenRecording | M::ScreenRecordingGif => {
-            Err("Ekran kaydı henüz hazır değil (faz 4).".into())
+            if app.state::<crate::record::RecordState>().is_active() {
+                crate::record::stop(&app.state::<crate::record::RecordState>()).map_err(err)?;
+                let _ = app.emit(
+                    crate::EVENT_RECORDING_CHANGED,
+                    app.state::<crate::record::RecordState>().status(),
+                );
+            } else {
+                let gif = matches!(method, M::ScreenRecordingGif);
+                start_recording_inner(app, gif, settings)?;
+            }
+            Ok(None)
         }
         M::ScrollingCapture => Err("Kaydırmalı yakalama henüz hazır değil (faz 6).".into()),
         M::LastRegion => Err("Son bölge henüz hazır değil.".into()),

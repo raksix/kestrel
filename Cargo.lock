@@ -2490,6 +2490,7 @@ dependencies = [
  "kestrel-capture",
  "kestrel-core",
  "kestrel-editor",
+ "kestrel-record",
  "kestrel-upload",
  "rusqlite",
  "serde",
@@ -2543,6 +2544,18 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "tracing",
+]
+
+[[package]]
+name = "kestrel-record"
+version = "0.1.0"
+dependencies = [
+ "kestrel-capture",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tracing",
+ "xcap",
 ]
 
 [[package]]

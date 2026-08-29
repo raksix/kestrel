@@ -29,8 +29,8 @@ ana backlog'u budur — `01-FEATURE-PARITY.md` özet, bu ise tam liste.
 | 1.8 | Region (Transparent) — karartmasız | `[ ]` | 2 | Overlay teması varyantı |
 | 1.9 | Last region — son bölgeyi tekrar kullan | `[ ]` | 2 | Ekran kimliğiyle birlikte kalıcı |
 | 1.10 | Custom region — kayıtlı sabit bölge | `[ ]` | 2 | Adlandırılmış bölge listesi |
-| 1.11 | Screen recording — video | `[ ]` | 4 | ffmpeg sidecar |
-| 1.12 | Screen recording (GIF) | `[ ]` | 4 | palettegen/paletteuse zinciri |
+| 1.11 | Screen recording — video | `[x]` | 4 | ffmpeg, H.264/HEVC/VP9/AV1 |
+| 1.12 | Screen recording (GIF) | `[x]` | 4 | palettegen/paletteuse zinciri |
 | 1.13 | Scrolling capture — kaydırmalı | `[ ]` | 6 | Platform otomasyonuna bağlı |
 | 1.14 | Auto capture — zamanlayıcılı | `[ ]` | 2 | Aralık + sabit bölge |
 
@@ -519,7 +519,7 @@ Tümü faz 6.
 
 | Bölüm | Toplam madde | Yapıldı | Kısmi | Kalan |
 |---|:-:|:-:|:-:|:-:|
-| Yakalama yöntemleri | 14 | 6 | 0 | 8 |
+| Yakalama yöntemleri | 14 | 8 | 0 | 6 |
 | Overlay | 31 | 11 | 1 | 19 |
 | Editör | 33 | 21 | 2 | 10 |
 | Efektler | ~40 | 0 | 0 | ~40 |

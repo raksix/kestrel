@@ -248,6 +248,39 @@ export interface Pinned {
 export const pinLastCapture = () => invoke<Pinned>("pin_last_capture");
 export const closePin = (label: string) => invoke<void>("close_pin", { label });
 
+// ── Recording ───────────────────────────────────────────────────────────
+
+export interface RecordingStatus {
+  active: boolean;
+  paused: boolean;
+  /** Seconds recorded so far, excluding pauses. */
+  elapsed: number;
+  output: string | null;
+}
+
+export interface FfmpegStatus {
+  available: boolean;
+  path: string | null;
+  version: string | null;
+  installHint: string | null;
+}
+
+export const ffmpegStatus = () => invoke<FfmpegStatus>("ffmpeg_status");
+export const recordingStatus = () => invoke<RecordingStatus>("recording_status");
+export const startRecording = (gif = false) =>
+  invoke<RecordingStatus>("start_recording", { gif });
+export const stopRecording = () => invoke<string>("stop_recording");
+export const cancelRecording = () => invoke<void>("cancel_recording");
+export const setRecordingPaused = (paused: boolean) =>
+  invoke<RecordingStatus>("set_recording_paused", { paused });
+
+export const RECORDING_CHANGED = "kestrel://recording-changed";
+
+export const onRecordingChanged = (
+  handler: (status: RecordingStatus) => void,
+): Promise<UnlistenFn> =>
+  listen<RecordingStatus>(RECORDING_CHANGED, (event) => handler(event.payload));
+
 // ── Events ──────────────────────────────────────────────────────────────
 export const onCaptureComplete = (handler: (output: CaptureOutput) => void): Promise<UnlistenFn> =>
   listen<CaptureOutput>(CAPTURE_COMPLETE, (event) => handler(event.payload));

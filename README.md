@@ -45,6 +45,13 @@ that language exactly, so those files work unmodified.
 - Pin a capture above every other window, with ShareX's keys: drag to move,
   wheel to scale, modifier+wheel for opacity, right click to close
 
+**Record**
+- Screen recording to H.264, HEVC, VP9 or AV1, and animated GIF with a
+  per-clip palette
+- Pause, resume and cancel, with a live duration that excludes paused time
+- Needs ffmpeg; if it is missing the app says so and gives the install command
+  for the platform
+
 **Share**
 - ShareX `.sxcu` custom uploaders work unmodified: all thirteen template
   functions, every body type, every request method
@@ -73,7 +80,7 @@ not capped at screen resolution.
 | 1 | Capture backends, region overlay, shortcuts | ✅ |
 | 2 | Annotation editor, framing, pin to screen, post-capture card | ✅ |
 | 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
-| 4 | Screen recording, GIF, video tools | ⏳ |
+| 4 | Screen recording, GIF, video tools | 🚧 audio and video tools left |
 | 5 | The remaining 24 tools, effect chain, OCR | ⏳ |
 | 6 | CLI, integrations, scrolling capture, 1.0 | ⏳ |
 
