@@ -190,7 +190,7 @@ Pipeline bu sırayla çalışır (ShareX ile birebir).
 | 4 | Görsel efektleri uygula | `[ ]` | 5 |
 | 5 | Editörde aç | `[x]` | 2 |
 | 6 | Panoya kopyala | `[x]` | 1 |
-| 7 | Ekrana sabitle | `[ ]` | 2 |
+| 7 | Ekrana sabitle | `[x]` | 2 |
 | 8 | Yazdır | `[ ]` | 3 |
 | 9 | Dosyaya kaydet | `[x]` | 1 |
 | 10 | Farklı kaydet | `[ ]` | 2 |
@@ -364,7 +364,7 @@ kategorili token menüsü · **canlı önizleme** (ShareX'te yok).
 | 1 | Renk seçici | `[ ]` | 5 | Hex/RGB/HSL/HSV, palet geçmişi |
 | 2 | Ekran renk seçici | `[ ]` | 2 | Overlay + büyüteç |
 | 3 | Cetvel | `[ ]` | 5 | Mesafe ve açı ölçümü |
-| 4 | Ekrana sabitle (Pin to screen) | `[ ]` | 2 | Ölçek, opaklık, gölge, kenarlık |
+| 4 | Ekrana sabitle (Pin to screen) | `[x]` | 2 | Ölçek, opaklık, kenarlık, çoklu pin |
 | 5 | Görsel editörü | `[ ]` | 2 | |
 | 6 | Görsel güzelleştirici | `[ ]` | 2 | |
 | 7 | Görsel efektleri | `[ ]` | 5 | |
@@ -523,11 +523,11 @@ Tümü faz 6.
 | Overlay | 31 | 11 | 1 | 19 |
 | Editör | 33 | 21 | 2 | 10 |
 | Efektler | ~40 | 0 | 0 | ~40 |
-| After-capture / after-upload | 28 | 4 | 0 | 24 |
+| After-capture / after-upload | 28 | 7 | 0 | 21 |
 | Yükleme yöntemleri | 8 | 0 | 0 | 8 |
 | Hedefler | ~80 servis + motor | 0 | 0 | tümü |
 | Dosya adı token'ları | 37 | 37 | 0 | 0 |
-| Araçlar | 25 | 0 | 0 | 25 |
+| Araçlar | 25 | 1 | 0 | 24 |
 | Workflow / otomasyon | 25 | 7 | 1 | 17 |
 | Geçmiş | 10 | 5 | 2 | 3 |
 | Ayarlar | 10 | 1 | 2 | 7 |

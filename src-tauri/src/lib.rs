@@ -9,6 +9,7 @@ mod commands;
 mod editor;
 mod history;
 mod overlay;
+mod pin;
 mod settings;
 mod shortcuts;
 mod uploads;
@@ -97,6 +98,8 @@ pub fn run() {
             commands::history_remove,
             commands::history_clear,
             commands::history_count,
+            commands::pin_last_capture,
+            commands::close_pin,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
@@ -145,6 +148,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let pin_last = MenuItem::with_id(app, "pin-last", "Ekrana sabitle", true, None::<&str>)?;
     let library = MenuItem::with_id(app, "open-library", "Kestrel'i aç…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Kestrel'den çık", true, None::<&str>)?;
 
@@ -158,6 +162,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &monitor_menu,
             &PredefinedMenuItem::separator(app)?,
             &edit_last,
+            &pin_last,
             &library,
             &PredefinedMenuItem::separator(app)?,
             &quit,
@@ -181,6 +186,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             "capture-active-window" => run_in_background(app, CaptureMethod::ActiveWindow),
             "capture-monitor" => run_in_background(app, CaptureMethod::MonitorMenu),
             "edit-last" => open_editor(app),
+            "pin-last" => pin_last_capture(app),
             "open-library" => show_main_window(app),
             "quit" => app.exit(0),
             other => tracing::warn!(id = other, "unhandled tray menu item"),
@@ -188,6 +194,14 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .build(app)?;
 
     Ok(())
+}
+
+/// Float the last capture above everything else.
+fn pin_last_capture(app: &AppHandle) {
+    if let Err(err) = pin::pin_last(app) {
+        tracing::warn!(%err, "could not pin the last capture");
+        let _ = app.emit(EVENT_CAPTURE_FAILED, err.to_string());
+    }
 }
 
 /// Raise the editor on the last capture, reporting failure the same way a

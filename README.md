@@ -42,6 +42,8 @@ that language exactly, so those files work unmodified.
 - Crop, padding, rounded corners, drop shadow, and solid or gradient
   backgrounds — ShareX's crop tool and image beautifier
 - Undo and redo across annotations and framing alike
+- Pin a capture above every other window, with ShareX's keys: drag to move,
+  wheel to scale, modifier+wheel for opacity, right click to close
 
 **Share**
 - ShareX `.sxcu` custom uploaders work unmodified: all thirteen template
@@ -69,7 +71,7 @@ not capped at screen resolution.
 |---|---|---|
 | 0 | Project shell, design system, CI, settings, tray | ✅ |
 | 1 | Capture backends, region overlay, shortcuts | ✅ |
-| 2 | Annotation editor, framing, post-capture card | 🚧 pin to screen left |
+| 2 | Annotation editor, framing, pin to screen, post-capture card | ✅ |
 | 3 | Uploaders, `.sxcu` engine, history, destinations | 🚧 workflow editor left |
 | 4 | Screen recording, GIF, video tools | ⏳ |
 | 5 | The remaining 24 tools, effect chain, OCR | ⏳ |

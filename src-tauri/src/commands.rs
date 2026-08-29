@@ -85,6 +85,15 @@ fn finish_capture(
     // editor must not lose the capture, which is already saved by this point.
     if settings
         .after_capture
+        .contains(&kestrel_core::model::AfterCaptureTask::PinToScreen)
+    {
+        if let Err(e) = crate::pin::pin(app, image.clone()) {
+            tracing::error!(%e, "could not pin the capture");
+        }
+    }
+
+    if settings
+        .after_capture
         .contains(&kestrel_core::model::AfterCaptureTask::OpenInEditor)
     {
         if let Err(e) = crate::editor::open(app, image) {
@@ -695,6 +704,18 @@ pub async fn upload_text(
 
     let _ = app.emit(crate::EVENT_UPLOAD_COMPLETE, uploaded.clone());
     Ok(uploaded)
+}
+
+// ── Pin to screen ───────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn pin_last_capture(app: AppHandle) -> Result<crate::pin::Pinned, String> {
+    crate::pin::pin_last(&app).map_err(err)
+}
+
+#[tauri::command]
+pub fn close_pin(app: AppHandle, label: String) {
+    crate::pin::close(&app, &label);
 }
 
 // ── Dispatch ────────────────────────────────────────────────────────────

@@ -236,6 +236,18 @@ export const defaultDestination = () => invoke<string | null>("default_destinati
 export const uploadLastCapture = (destination?: string) =>
   invoke<Uploaded>("upload_last_capture", { destination });
 
+// ── Pin to screen ───────────────────────────────────────────────────────
+
+export interface Pinned {
+  label: string;
+  path: string;
+  width: number;
+  height: number;
+}
+
+export const pinLastCapture = () => invoke<Pinned>("pin_last_capture");
+export const closePin = (label: string) => invoke<void>("close_pin", { label });
+
 // ── Events ──────────────────────────────────────────────────────────────
 export const onCaptureComplete = (handler: (output: CaptureOutput) => void): Promise<UnlistenFn> =>
   listen<CaptureOutput>(CAPTURE_COMPLETE, (event) => handler(event.payload));

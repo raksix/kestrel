@@ -4,6 +4,7 @@ import App from "./App";
 import Editor from "./features/editor/Editor";
 import Overlay from "./features/overlay/Overlay";
 import Picker from "./features/picker/Picker";
+import Pin from "./features/pin/Pin";
 import "./design/tokens.css";
 import "./design/app.css";
 
@@ -34,6 +35,17 @@ function root() {
       );
     case "editor":
       return <Editor />;
+    case "pin":
+      // Like the overlay, a pin window is transparent: any background here
+      // would show as a box around the image.
+      document.documentElement.classList.add("is-overlay");
+      return (
+        <Pin
+          path={params.get("path") ?? ""}
+          width={number("w")}
+          height={number("h")}
+        />
+      );
     case "picker":
       return <Picker initialTab={params.get("tab") === "displays" ? "displays" : "windows"} />;
     default:

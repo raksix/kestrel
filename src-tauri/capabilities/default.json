@@ -6,7 +6,8 @@
     "main",
     "overlay-*",
     "picker",
-    "editor"
+    "editor",
+    "pin-*"
   ],
   "permissions": [
     "core:default",
@@ -19,6 +20,10 @@
     "dialog:allow-save",
     "notification:default",
     "global-shortcut:default",
-    "opener:allow-open-url"
+    "opener:allow-open-url",
+    "core:window:allow-set-size",
+    "core:window:allow-close",
+    "core:window:allow-set-always-on-top",
+    "core:webview:allow-internal-toggle-devtools"
   ]
 }

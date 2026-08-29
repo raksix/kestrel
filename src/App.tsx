@@ -4,6 +4,7 @@ import Library from "./features/library/Library";
 import PermissionGate from "./features/settings/PermissionGate";
 import ShortcutSettings from "./features/settings/ShortcutSettings";
 import { openEditor } from "./lib/editorTypes";
+import { pinLastCapture } from "./lib/ipc";
 import {
   formatShortcut,
   getSettings,
@@ -332,6 +333,14 @@ function CaptureCard({
             onClick={() => void openEditor()}
           >
             Düzenle
+          </button>
+          <button
+            type="button"
+            className="button"
+            style={{ minHeight: 22, padding: "0 var(--space-2)" }}
+            onClick={() => void pinLastCapture()}
+          >
+            Sabitle
           </button>
           <button
             type="button"
