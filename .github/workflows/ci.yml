@@ -55,7 +55,8 @@ jobs:
             librsvg2-dev \
             libxdo-dev \
             patchelf \
-            ffmpeg
+            ffmpeg \
+            libpipewire-0.3-dev
 
       # The recording and conversion tests skip themselves when ffmpeg is
       # absent, so without this they would pass by doing nothing — and those
@@ -79,6 +80,10 @@ jobs:
           mkdir -p dist
           echo '<!doctype html><title>ci</title>' > dist/index.html
 
+      # Deliberately the current stable rather than a pinned version, so a new
+      # lint shows up here rather than accumulating until someone upgrades.
+      # A red build the week after a Rust release usually means "fix the new
+      # lint", not "something broke".
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -125,7 +130,8 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo-dev \
-            patchelf
+            patchelf \
+            libpipewire-0.3-dev
 
       - name: Prepare frontend bundle
         run: |

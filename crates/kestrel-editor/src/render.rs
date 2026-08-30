@@ -576,8 +576,11 @@ fn pixelate_region(canvas: &mut RgbaImage, rect: Rect, block: u32) {
                     n += 1;
                 }
             }
-            if n > 0 {
-                let average = Rgba([(r / n) as u8, (g / n) as u8, (b / n) as u8, 255]);
+            // A block clipped entirely outside the redacted area contributes no
+            // pixels, and averaging none of them is a divide by zero.
+            if let Some(count) = std::num::NonZeroU32::new(n) {
+                let mean = |total: u32| (total / count) as u8;
+                let average = Rgba([mean(r), mean(g), mean(b), 255]);
                 for y in by..(by + block).min(y1) {
                     for x in bx..(bx + block).min(x1) {
                         let pixel = canvas.get_pixel_mut(x as u32, y as u32);

@@ -87,7 +87,7 @@ pub fn load_all() -> Result<Vec<(String, CustomUploader)>> {
         }
     }
 
-    found.sort_by(|a, b| a.1.display_name().cmp(&b.1.display_name()));
+    found.sort_by_key(|(_, uploader)| uploader.display_name());
     Ok(found)
 }
 

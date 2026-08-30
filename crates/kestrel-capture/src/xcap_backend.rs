@@ -96,8 +96,9 @@ impl CaptureBackend for XcapBackend {
             .collect();
 
         // Front-most first: that is the order a picker should show them in,
-        // and it makes "active window" mean the top of this list.
-        windows.sort_by(|a, b| b.z.cmp(&a.z));
+        // and it makes "active window" mean the top of this list. Descending,
+        // hence the negation rather than a plain sort.
+        windows.sort_by_key(|window| std::cmp::Reverse(window.z));
         Ok(windows)
     }
 

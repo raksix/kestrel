@@ -316,8 +316,11 @@ fn pixelate(image: &RgbaImage, block: u32) -> RgbaImage {
                     n += 1;
                 }
             }
-            if n > 0 {
-                let average = Rgba([(r / n) as u8, (g / n) as u8, (b / n) as u8, (a / n) as u8]);
+            // A block clipped entirely outside the image contributes no pixels,
+            // and averaging none of them is a divide by zero.
+            if let Some(count) = std::num::NonZeroU32::new(n) {
+                let mean = |total: u32| (total / count) as u8;
+                let average = Rgba([mean(r), mean(g), mean(b), mean(a)]);
                 for py in y..(y + block).min(image.height()) {
                     for px in x..(x + block).min(image.width()) {
                         out.put_pixel(px, py, average);
