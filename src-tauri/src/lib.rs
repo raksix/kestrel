@@ -185,6 +185,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running Kestrel")
         .run(|app, event| {
+            // Only the Opened arm below needs the handle, and that arm exists
+            // on Apple platforms only.
+            #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+            let _ = &app;
+
             // Drop the endpoint file on the way out, so `kestrel capture`
             // reports "not running" instead of failing to reach a dead port.
             match event {
