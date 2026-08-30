@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Typecheck and build
+        run: npm run build
+
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Tauri needs a webview and tray stack on Linux.
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf \
+            ffmpeg
+
+      # The recording and conversion tests skip themselves when ffmpeg is
+      # absent, so without this they would pass by doing nothing — and those
+      # are the tests that caught WebM being handed an AAC track, which the
+      # argument-level tests were perfectly happy with.
+      - name: Install ffmpeg (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install ffmpeg
+
+      - name: Install ffmpeg (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install ffmpeg --no-progress -y
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      # The platform crates need a frontend bundle to exist before they build.
+      - name: Prepare frontend bundle
+        shell: bash
+        run: |
+          mkdir -p dist
+          echo '<!doctype html><title>ci</title>' > dist/index.html
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      # Prove the tests that need ffmpeg actually ran, rather than skipping in
+      # silence the way they do on a machine without it.
+      - name: Check ffmpeg tests were not skipped
+        shell: bash
+        run: |
+          output=$(cargo test -p kestrel-record --test convert -- --nocapture 2>&1)
+          if grep -q "skipping: ffmpeg not installed" <<<"$output"; then
+            echo "::error::ffmpeg is missing on this runner, so the conversion tests did nothing"
+            exit 1
+          fi
+
+  msrv:
+    name: Minimum Rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The README tells people which toolchain they need. Without this the
+      # claim is only ever true by accident, and it has been wrong before.
+      - name: Read rust-version from the workspace
+        id: msrv
+        run: |
+          version=$(grep -m1 '^rust-version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Workspace declares Rust $version"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf
+
+      - name: Prepare frontend bundle
+        run: |
+          mkdir -p dist
+          echo '<!doctype html><title>ci</title>' > dist/index.html
+
+      - name: Build with the declared minimum
+        run: cargo check --workspace --all-targets

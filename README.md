@@ -223,6 +223,25 @@ compilation. Without the first, a single Retina screenshot takes seconds to
 process; without the second, incremental and optimisation together produce
 stale symbols and an intermittent link failure.
 
+## Releases
+
+Tagging `v*` builds and drafts a release with bundles for macOS (both
+architectures), Windows and Linux, plus the `kestrel` command-line binary for
+each — the bundler does not build it, so it is built and attached separately
+rather than being quietly missing from a release the README says includes it.
+
+**The builds are unsigned.** macOS refuses to open an unsigned app on first
+launch; right-click it and choose Open, or:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Kestrel.app
+```
+
+Signing needs an Apple Developer account and a Windows certificate. Until
+those exist, saying so beats shipping something that looks broken.
+
+Not yet published to Homebrew, winget, AUR or Flathub.
+
 Linux also needs the usual Tauri system dependencies (`libwebkit2gtk-4.1-dev`,
 `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`).
 

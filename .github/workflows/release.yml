@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build (must already exist)
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Two macOS builds rather than a universal binary: a universal build
+          # doubles the download for everyone to spare one architecture a
+          # separate file, and both machines are cheap to build for.
+          - os: macos-latest
+            label: macOS (Apple silicon)
+            args: --target aarch64-apple-darwin
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            label: macOS (Intel)
+            args: --target x86_64-apple-darwin
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            label: Linux
+            args: ""
+            target: ""
+          - os: windows-latest
+            label: Windows
+            args: ""
+            target: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.label }}
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf
+
+      - run: npm ci
+
+      # The `kestrel` command is a separate binary from the app, so the bundler
+      # does not build it. Without this the release would ship an app with no
+      # command line, which the README says exists.
+      - name: Build the command-line binary
+        run: cargo build --release -p kestrel-cli ${{ matrix.args }}
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: Kestrel ${{ github.event.inputs.tag || github.ref_name }}
+          releaseBody: |
+            Unsigned builds. macOS will refuse to open the app on first launch:
+            right-click it and choose Open, or run
+            `xattr -dr com.apple.quarantine /Applications/Kestrel.app`.
+
+            The `kestrel` command-line binary is attached separately.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Attach the command-line binary
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          dir="target/${{ matrix.target }}/release"
+          [ -n "${{ matrix.target }}" ] || dir="target/release"
+
+          binary="$dir/kestrel"
+          [ -f "$binary" ] || binary="$dir/kestrel.exe"
+
+          if [ ! -f "$binary" ]; then
+            echo "::error::the kestrel binary was not built at $dir"
+            exit 1
+          fi
+
+          name="kestrel-$(echo '${{ matrix.label }}' | tr ' ()' '-' | tr -s '-' | sed 's/-$//')"
+          [ "${{ matrix.os }}" != "windows-latest" ] || name="$name.exe"
+          cp "$binary" "$name"
+          gh release upload "$tag" "$name" --clobber
