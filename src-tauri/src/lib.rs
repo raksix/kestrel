@@ -193,6 +193,12 @@ pub fn run() {
                 // rather than on the command line, and it can arrive long after
                 // launch — every subsequent double-click on a running app comes
                 // this way.
+                //
+                // The variant only exists on Apple platforms, so the arm has to
+                // be gated or the crate does not compile elsewhere. Windows and
+                // Linux pass the file as an argument instead, which the launch
+                // path already handles and hands to the running instance.
+                #[cfg(any(target_os = "macos", target_os = "ios"))]
                 tauri::RunEvent::Opened { urls } => {
                     for url in urls {
                         let Some(intent) = launch::parse_argument(url.as_str()).or_else(|| {

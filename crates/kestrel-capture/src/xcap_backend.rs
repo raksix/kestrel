@@ -258,7 +258,10 @@ impl CaptureBackend for XcapBackend {
             window_capture: usable && !is_wayland(),
             region_capture: usable,
             global_shortcuts: !is_wayland(),
-            scrolling_capture: usable && cfg!(target_os = "windows"),
+            // Available everywhere, because Kestrel does not drive the scroll
+            // — the user does, and the frames are joined afterwards. This used
+            // to say Windows only, from when the plan was ShareX's WM_SCROLL.
+            scrolling_capture: usable,
             screen_permission: permission,
         }
     }
