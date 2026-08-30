@@ -184,6 +184,14 @@ export interface OverlaySample {
   hex: string;
 }
 
+/**
+ * The image on the clipboard as a PNG data URL, or null when there is none.
+ *
+ * Read through Rust rather than the DOM `paste` event, which needs a focus the
+ * transparent overlay window does not reliably have.
+ */
+export const clipboardImage = () => invoke<string | null>("clipboard_image");
+
 export const overlaySample = (x: number, y: number, radius?: number) =>
   invoke<OverlaySample>("overlay_sample", { x, y, radius });
 

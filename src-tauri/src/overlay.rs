@@ -54,6 +54,21 @@ pub fn begin_region_selection(app: &AppHandle) -> Result<(), String> {
     let backend = kestrel_capture::backend();
     let frames = backend.freeze().map_err(|e| e.to_string())?;
     let displays = frames.displays();
+
+    // Stage each display's frozen frame where the webview can load it. The
+    // overlay paints this rather than being a transparent hole onto the live
+    // screen, for two reasons that both came from using it:
+    //
+    // - The dim then covers *everything*, including the Dock, which is what
+    //   ShareX does and what people expect a capture overlay to look like.
+    // - Blur and pixelate can only redact pixels they can see. On a transparent
+    //   canvas they sampled nothing and appeared to do nothing, which read as
+    //   "it only pixelates the shapes I drew".
+    //
+    // It goes to disk and is loaded over the asset protocol, not pushed through
+    // IPC: a full-screen frame is megabytes, and that is the same reason the
+    // editor stages its base image instead of sending a data URL.
+    let staged = stage_frames(app, &frames);
     app.state::<OverlayState>().store(frames);
 
     // Window creation has to happen on the main thread; queueing it also
@@ -68,9 +83,14 @@ pub fn begin_region_selection(app: &AppHandle) -> Result<(), String> {
                 continue;
             }
 
+            let frame = staged
+                .get(&screen.id)
+                .map(|path| urlencoding_lite(&path.to_string_lossy()))
+                .unwrap_or_default();
+
             let url = WebviewUrl::App(
                 format!(
-                    "index.html?view=overlay&display={}&x={}&y={}&w={}&h={}&s={}",
+                    "index.html?view=overlay&display={}&x={}&y={}&w={}&h={}&s={}&frame={frame}",
                     screen.id,
                     screen.region.x,
                     screen.region.y,
@@ -132,6 +152,67 @@ fn focus_existing_overlays(app: &AppHandle) {
 ///
 /// Closing is a main-thread operation too, and this runs from a command
 /// handler, so it is queued rather than called directly.
+/// Write each display's frozen frame to the cache directory.
+///
+/// Best effort: a display whose frame cannot be staged simply has no backdrop,
+/// and the overlay falls back to being transparent over the live screen. That
+/// is worse than the real thing but far better than refusing to open a
+/// selection because a temp file could not be written.
+fn stage_frames(
+    app: &AppHandle,
+    frames: &FrozenFrames,
+) -> std::collections::HashMap<u32, std::path::PathBuf> {
+    let mut staged = std::collections::HashMap::new();
+
+    let Some(dir) = app
+        .path()
+        .app_cache_dir()
+        .ok()
+        .map(|dir| dir.join("overlay"))
+    else {
+        return staged;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return staged;
+    }
+
+    for info in frames.displays() {
+        // Cropping the whole display out of the frames is how we get one image
+        // per screen without the frame module having to expose its internals.
+        let Ok(capture) = frames.crop(info.region) else {
+            continue;
+        };
+        // A per-display fixed name: the previous selection's file is dead the
+        // moment a new one starts, so the cache cannot grow without bound.
+        let path = dir.join(format!("display-{}.png", info.id));
+        if capture.image.save(&path).is_ok() {
+            staged.insert(info.id, path);
+        }
+    }
+
+    staged
+}
+
+/// Percent-encode the few characters that would break a query string.
+///
+/// A full URL encoder would be the wrong tool: this value is a filesystem path
+/// going into a query parameter we control at both ends, and the characters
+/// that actually matter are the delimiters.
+fn urlencoding_lite(value: &str) -> String {
+    value
+        .chars()
+        .map(|c| match c {
+            ' ' => "%20".to_string(),
+            '&' => "%26".to_string(),
+            '#' => "%23".to_string(),
+            '?' => "%3F".to_string(),
+            '%' => "%25".to_string(),
+            '+' => "%2B".to_string(),
+            other => other.to_string(),
+        })
+        .collect()
+}
+
 pub fn close_overlays(app: &AppHandle) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {

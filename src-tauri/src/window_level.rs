@@ -25,6 +25,17 @@ mod imp {
     use objc2_app_kit::{NSScreenSaverWindowLevel, NSWindow};
     use tauri::WebviewWindow;
 
+    // The level CoreGraphics uses for the window that shields the screen. It is
+    // above everything the window server draws, the Dock included.
+    //
+    // NSScreenSaverWindowLevel (1000) was not enough: with the level read back
+    // as 1000, the Dock still drew on top. Apple documents no constant for
+    // "above the Dock", so this call is the supported way to ask rather than a
+    // number to guess at.
+    unsafe extern "C" {
+        fn CGShieldingWindowLevel() -> i32;
+    }
+
     /// Put `window` above the Dock and the menu bar.
     pub fn raise_above_shell(window: &WebviewWindow) {
         let Ok(pointer) = window.ns_window() else {
@@ -39,20 +50,28 @@ mod imp {
         // `WebviewWindow`, which outlives this call because `window` is
         // borrowed for it. `setLevel:` and `level` are plain property
         // accessors with no ownership implications.
+        // SAFETY: `CGShieldingWindowLevel` takes no arguments and returns a
+        // plain integer.
+        let shield = unsafe { CGShieldingWindowLevel() } as isize;
+
+        // Fall back rather than trust a nonsense answer: a level at or below
+        // the screen saver's would leave us under the Dock, which is the bug
+        // this exists to fix.
+        let wanted = shield.max(NSScreenSaverWindowLevel);
+
         let applied = unsafe {
             let ns_window: &NSWindow = &*pointer.cast();
-            ns_window.setLevel(NSScreenSaverWindowLevel);
+            ns_window.setLevel(wanted);
             ns_window.level()
         };
 
-        // Read it back rather than assuming. This started as a bug report of
-        // "sometimes the Dock still covers it", and a setter that silently
-        // does not stick is exactly the kind of thing that turns into a
-        // report like that instead of a log line.
-        if applied != NSScreenSaverWindowLevel {
+        // Read it back rather than assuming. A setter that silently does not
+        // stick is exactly the kind of thing that becomes a bug report of
+        // "the Dock is still on top" instead of a log line.
+        if applied != wanted {
             tracing::warn!(
                 applied,
-                wanted = NSScreenSaverWindowLevel,
+                wanted,
                 "the overlay window level did not stick; the Dock may cover it"
             );
         }

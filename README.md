@@ -117,8 +117,10 @@ that language exactly, so those files work unmodified.
 - ShareX-compatible filename patterns (all 37 tokens) with a live preview
 - Settings persisted as readable JSON in the platform config directory
 
-Selections are cropped from a snapshot taken *before* the overlay appears, so
-the overlay's own dimming can never end up in the capture. The exported file is
+The overlay paints the frozen screen and dims it, so it covers the Dock and the
+menu bar like ShareX does — and so blur and pixelate have real pixels to redact.
+Selections are still cropped from that snapshot in Rust rather than from
+anything the overlay drew, so its dimming can never end up in the capture. The exported file is
 rendered in Rust, not the webview, so it looks the same on every platform and is
 not capped at screen resolution.
 

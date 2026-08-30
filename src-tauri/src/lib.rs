@@ -83,6 +83,7 @@ pub fn run() {
             commands::commit_region_capture,
             commands::cancel_region_capture,
             commands::overlay_sample,
+            commands::clipboard_image,
             commands::open_window_picker,
             commands::close_window_picker,
             commands::get_settings,

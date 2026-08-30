@@ -31,6 +31,7 @@ function root() {
           origin={{ x: number("x"), y: number("y") }}
           size={{ width: number("w", window.innerWidth), height: number("h", window.innerHeight) }}
           scale={number("s", 1) || 1}
+          framePath={params.get("frame") || null}
         />
       );
     case "editor":

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   cancelRegionCapture,
+  clipboardImage,
   commitRegionCapture,
   listWindows,
   type Region,
@@ -15,7 +17,7 @@ import {
   type Shape,
 } from "../../lib/editorTypes";
 import { drawShapesOnly, setImageReadyHandler } from "../editor/canvas";
-import { imageFromEvent, placeAt } from "../../lib/paste";
+import { imageFromClipboard, imageFromEvent, placeAt } from "../../lib/paste";
 import Magnifier from "./Magnifier";
 import OverlayText from "./OverlayText";
 import OverlayToolbar, {
@@ -31,6 +33,15 @@ interface OverlayProps {
   size: { width: number; height: number };
   /** Physical pixels per logical point on this display. */
   scale: number;
+  /**
+   * The frozen screen for this display, staged on disk by Rust.
+   *
+   * Null when staging failed, in which case the overlay falls back to being
+   * transparent over the live screen — usable, but without a dimmed backdrop
+   * and with blur and pixelate previewing nothing, since they can only redact
+   * pixels they can see.
+   */
+  framePath: string | null;
 }
 
 interface Point {
@@ -62,7 +73,46 @@ function rectFromPoints(a: Point, b: Point): Region {
  * release to finish. With no tool selected — the default — a drag is the
  * selection itself, so the fast path stays one gesture.
  */
-export default function Overlay({ origin, size, scale }: OverlayProps) {
+/** How much of the screen the dim takes away. Matches ShareX closely enough
+ * that a screenshot of the overlay looks familiar. */
+const DIM = "rgba(0, 0, 0, 0.42)";
+
+/**
+ * Dim everything except the selection.
+ *
+ * Four rectangles rather than a full fill with a hole punched in it: punching
+ * a hole means `clearRect`, which would take the frozen frame with it and leave
+ * the selection showing the live screen instead of the capture.
+ *
+ * With no selection yet the whole screen dims. Hovering a window used to leave
+ * that window bright, which meant most of the screen stayed undimmed and the
+ * overlay did not look like it had done anything — the window snap is shown by
+ * its outline instead.
+ */
+function dimAround(
+  ctx: CanvasRenderingContext2D,
+  selection: Region | null,
+  width: number,
+  height: number,
+): void {
+  ctx.save();
+  ctx.fillStyle = DIM;
+
+  if (!selection || selection.width < 1 || selection.height < 1) {
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+    return;
+  }
+
+  const { x, y, width: w, height: h } = selection;
+  ctx.fillRect(0, 0, width, y);
+  ctx.fillRect(0, y + h, width, height - (y + h));
+  ctx.fillRect(0, y, x, h);
+  ctx.fillRect(x + w, y, width - (x + w), h);
+  ctx.restore();
+}
+
+export default function Overlay({ origin, size, scale, framePath }: OverlayProps) {
   const [anchor, setAnchor] = useState<Point | null>(null);
   const [cursor, setCursor] = useState<Point>({ x: 0, y: 0 });
   const [selection, setSelection] = useState<Region | null>(null);
@@ -84,9 +134,21 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
   );
   const [magnify, setMagnify] = useState(false);
   const [redoStack, setRedoStack] = useState<Shape[][]>([]);
+  const [frame, setFrame] = useState<HTMLImageElement | null>(null);
 
   const committing = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!framePath) return;
+    const element = new Image();
+    element.onload = () => setFrame(element);
+    element.onerror = () =>
+      // Not fatal: without a backdrop the overlay still selects, so this is a
+      // downgrade rather than a failure.
+      console.warn("the frozen frame could not be loaded; overlay has no backdrop");
+    element.src = convertFileSrc(framePath);
+  }, [framePath]);
 
   // Window rects power snap-to-window. If enumeration is unavailable (Wayland,
   // or a missing permission) the overlay still works as a plain drag selector.
@@ -242,17 +304,42 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
     [drawing, buildShape],
   );
 
-  // Annotations are painted on their own transparent canvas above the dimming,
-  // so the dim layer never ends up composited into a shape.
+  const highlight = hovered ? toLocal(hovered.region) : null;
+  const active = selection ?? highlight;
+
+  // Everything is drawn on one canvas: the frozen screen, the annotations, then
+  // the dim. Layering these as separate DOM elements was how blur and pixelate
+  // ended up with nothing to sample.
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
     const paint = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // The backing store is in physical pixels so the frozen screen is not
+      // softened on a Retina display, but everything below works in logical
+      // points — pointer coordinates, shape geometry, the dim — so the
+      // transform converts once here instead of at every call site.
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.clearRect(0, 0, size.width, size.height);
+
+      // The frozen screen first, so blur and pixelate have real pixels to
+      // redact. On a transparent canvas they sampled nothing and looked like
+      // they only affected the shapes that had already been drawn.
+      if (frame) {
+        ctx.drawImage(frame, 0, 0, size.width, size.height);
+      }
+
       const painted = previewShape ? [...shapes, previewShape] : shapes;
-      drawShapesOnly(ctx, painted, canvas.width, canvas.height);
+      drawShapesOnly(ctx, painted, size.width, size.height);
+
+      // The dim goes on last and only outside the selection, so annotations
+      // inside it stay at full strength while everything that will not be
+      // captured recedes. Without a backdrop there is nothing to dim — the
+      // live screen shows through the transparent window instead.
+      if (frame) {
+        dimAround(ctx, selection, size.width, size.height);
+      }
     };
 
     paint();
@@ -261,7 +348,7 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
     // draws nothing for it. This is how it gets a second chance.
     setImageReadyHandler(paint);
     return () => setImageReadyHandler(null);
-  }, [shapes, previewShape, size]);
+  }, [shapes, previewShape, size, scale, frame, selection]);
 
   // ── Pointer ───────────────────────────────────────────────────────────
 
@@ -430,6 +517,22 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
         else undo();
         return;
       }
+      if (mod && event.key.toLowerCase() === "v") {
+        // The webview's own paste event does not reach a transparent
+        // always-on-top window reliably, so the shortcut is handled here and
+        // the clipboard is read through Rust.
+        event.preventDefault();
+        void imageFromClipboard(clipboardImage).then((image) => {
+          if (!image) return;
+          addShape({
+            kind: "image",
+            rect: placeAt(image, cursorRef.current, size),
+            data: image.data,
+            opacity: 1,
+          });
+        });
+        return;
+      }
       if (!mod && event.key.toLowerCase() === "m") {
         event.preventDefault();
         setMagnify((on) => !on);
@@ -487,10 +590,7 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cancel, commit, editing, redo, selection, size, tool, undo]);
-
-  const highlight = hovered ? toLocal(hovered.region) : null;
-  const active = selection ?? highlight;
+  }, [addShape, cancel, commit, editing, redo, selection, size, tool, undo]);
 
   return (
     <div
@@ -503,31 +603,21 @@ export default function Overlay({ origin, size, scale }: OverlayProps) {
       role="application"
       aria-label="Bölge seçimi"
     >
-      {active ? (
-        <>
-          <div className="overlay__dim" style={{ inset: "0 0 auto 0", height: active.y }} />
-          <div
-            className="overlay__dim"
-            style={{ top: active.y + active.height, left: 0, right: 0, bottom: 0 }}
-          />
-          <div
-            className="overlay__dim"
-            style={{ top: active.y, left: 0, width: active.x, height: active.height }}
-          />
-          <div
-            className="overlay__dim"
-            style={{ top: active.y, left: active.x + active.width, right: 0, height: active.height }}
-          />
-        </>
-      ) : (
-        <div className="overlay__dim" style={{ inset: 0 }} />
-      )}
-
+      {/*
+        No dim elements here: the canvas paints the frozen screen, the
+        annotations and the dim in one pass, so blur and pixelate have real
+        pixels to work from. When the frame could not be staged the canvas is
+        transparent and the live screen shows through undimmed.
+      */}
       <canvas
         ref={canvasRef}
         className="overlay__canvas"
-        width={size.width}
-        height={size.height}
+        // The backing store is physical pixels; CSS stretches it back to the
+        // window. Without this the frozen screen is drawn at half resolution on
+        // a Retina display and the overlay looks softer than the desktop it is
+        // covering.
+        width={Math.round(size.width * scale)}
+        height={Math.round(size.height * scale)}
       />
 
       {!anchor && !selection && !tool && (

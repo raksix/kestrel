@@ -114,3 +114,24 @@ export function placeAt(
     height,
   };
 }
+
+
+/**
+ * The clipboard image, measured so it can be placed.
+ *
+ * `imageFromEvent` covers drops and any paste the webview does deliver; this
+ * covers the case it does not, which on the overlay is most of them.
+ */
+export async function imageFromClipboard(
+  read: () => Promise<string | null>,
+): Promise<PastedImage | null> {
+  const data = await read();
+  if (!data) return null;
+
+  try {
+    const element = await load(data);
+    return { data, width: element.width, height: element.height };
+  } catch {
+    return null;
+  }
+}

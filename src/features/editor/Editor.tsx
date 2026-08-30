@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { clipboardImage } from "../../lib/ipc";
 import {
   boundsOf,
   changesGeometry,
@@ -28,7 +29,7 @@ import {
   type Point,
   type Shape,
 } from "../../lib/editorTypes";
-import { imageFromEvent, placeAt } from "../../lib/paste";
+import { imageFromClipboard, imageFromEvent, placeAt } from "../../lib/paste";
 import { drawDocument, drawSelection, setImageReadyHandler } from "./canvas";
 import "./editor.css";
 
@@ -214,13 +215,39 @@ export default function Editor() {
     const onDrop = (event: DragEvent) => void accept(event);
     const onDragOver = (event: DragEvent) => event.preventDefault();
 
+    // The DOM paste event is the fast path when the webview delivers it; this
+    // is the fallback for when it does not, reading the clipboard through Rust.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "v") return;
+      if (editing !== null || !session) return;
+
+      void imageFromClipboard(clipboardImage).then((image) => {
+        if (!image) return;
+        commit([
+          ...shapesRef.current,
+          {
+            kind: "image",
+            rect: placeAt(
+              image,
+              { x: session.width / 2, y: session.height / 2 },
+              { width: session.width, height: session.height },
+            ),
+            data: image.data,
+            opacity: 1,
+          },
+        ]);
+      });
+    };
+
     window.addEventListener("paste", onPaste);
     window.addEventListener("drop", onDrop);
     window.addEventListener("dragover", onDragOver);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("paste", onPaste);
       window.removeEventListener("drop", onDrop);
       window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [commit, editing, session]);
 

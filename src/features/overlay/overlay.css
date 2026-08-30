@@ -16,8 +16,10 @@
   background: transparent;
 }
 
-/* Annotations live above the dimming so a redaction never composites the dim
-   layer into itself. Pointer events stay on the overlay beneath. */
+/* One canvas holds the frozen screen, the annotations and the dim, in that
+   order. They were separate layers until blur and pixelate turned out to have
+   nothing to sample on a transparent canvas. Pointer events stay on the
+   overlay beneath. */
 .overlay__canvas {
   position: absolute;
   inset: 0;
@@ -28,12 +30,6 @@
 
 .overlay--drawing {
   cursor: crosshair;
-}
-
-.overlay__dim {
-  position: absolute;
-  background: rgb(0 0 0 / 0.42);
-  pointer-events: none;
 }
 
 .overlay__crosshair {

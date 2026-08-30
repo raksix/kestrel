@@ -1626,3 +1626,96 @@ pub fn overlay_sample(
 ) -> Result<crate::overlay::Sample, String> {
     crate::overlay::sample(&app, x, y, radius.unwrap_or(12))
 }
+
+/// The image on the clipboard, as a PNG data URL.
+///
+/// Read through Rust rather than the webview's `paste` event. The overlay is a
+/// borderless transparent always-on-top window; whether it has the focus a DOM
+/// paste needs is up to the platform, and on macOS it frequently does not — so
+/// Cmd+V did nothing at all. Asking the OS directly works regardless of focus,
+/// and it is the same clipboard the rest of the app writes to.
+///
+/// `None` when the clipboard holds no image. That is not an error: pasting text
+/// onto a screenshot is a reasonable thing to try and doing nothing is the
+/// right answer.
+#[tauri::command]
+pub fn clipboard_image() -> Result<Option<String>, String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(err)?;
+
+    let image = match clipboard.get_image() {
+        Ok(image) => image,
+        // arboard reports "no image" as an error, so a missing image and a
+        // broken clipboard look the same here. Treating both as "nothing to
+        // paste" is right: neither is something the user can act on.
+        Err(_) => return Ok(None),
+    };
+
+    encode_clipboard_image(
+        image.width as u32,
+        image.height as u32,
+        image.bytes.into_owned(),
+    )
+    .map(Some)
+}
+
+/// Turn raw RGBA from the clipboard into a PNG data URL.
+///
+/// Split out from the command because this is the part that can be quietly
+/// wrong — a byte count that does not match the reported size produces either
+/// a panic or a skewed image, and neither is something the clipboard tells you
+/// about.
+fn encode_clipboard_image(width: u32, height: u32, bytes: Vec<u8>) -> Result<String, String> {
+    let buffer = image::RgbaImage::from_raw(width, height, bytes).ok_or_else(|| {
+        format!("the clipboard reported {width}x{height} but sent a different number of bytes")
+    })?;
+
+    let mut png = std::io::Cursor::new(Vec::new());
+    buffer
+        .write_to(&mut png, image::ImageFormat::Png)
+        .map_err(err)?;
+
+    use base64::Engine as _;
+    Ok(format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(png.into_inner())
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_clipboard_image_becomes_a_png_data_url() {
+        let pixels = vec![255u8; 4 * 4 * 4];
+        let url = encode_clipboard_image(4, 4, pixels).expect("encodes");
+
+        assert!(url.starts_with("data:image/png;base64,"), "{url}");
+
+        // Decode it back rather than trusting the prefix: a truncated or
+        // mis-encoded payload still starts with the right characters.
+        use base64::Engine as _;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(url.split_once(',').unwrap().1)
+            .expect("valid base64");
+        let decoded = image::load_from_memory(&bytes).expect("a real png");
+
+        assert_eq!(decoded.width(), 4);
+        assert_eq!(decoded.height(), 4);
+    }
+
+    #[test]
+    fn a_byte_count_that_does_not_match_the_size_is_an_error_not_a_panic() {
+        // The clipboard is an OS API handing over a length and a buffer; if
+        // they disagree, saying so beats a panic or a skewed image.
+        let result = encode_clipboard_image(100, 100, vec![0u8; 16]);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("100x100"));
+    }
+
+    #[test]
+    fn a_zero_sized_clipboard_image_is_refused() {
+        assert!(encode_clipboard_image(0, 10, Vec::new()).is_err());
+    }
+}
