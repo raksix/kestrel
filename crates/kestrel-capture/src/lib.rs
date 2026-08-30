@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 pub mod frame;
 pub mod geometry;
 pub mod permissions;
+pub mod stitch;
 
 pub use frame::FrozenFrames;
 pub use geometry::{Point, Region};

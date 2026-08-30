@@ -1268,7 +1268,46 @@ pub fn dispatch(
             }
             Ok(None)
         }
-        M::ScrollingCapture => Err("Kaydırmalı yakalama henüz hazır değil (faz 6).".into()),
+        // Toggles, like recording: press once to start, scroll the window
+        // yourself, press again to join what was captured. There is no window
+        // to click while the target app has the focus, so the shortcut has to
+        // be both halves.
+        M::ScrollingCapture => {
+            if app.state::<crate::scrolling::ScrollState>().is_active() {
+                let scrolled = crate::scrolling::finish(app).map_err(err)?;
+                if scrolled.had_gap {
+                    // Said out loud, because the picture looks complete.
+                    tracing::warn!("the scrolling capture has gaps: scroll more slowly");
+                }
+                let capture = kestrel_capture::Capture {
+                    region: kestrel_capture::Region::new(
+                        scrolled.region.x,
+                        scrolled.region.y,
+                        scrolled.image.width(),
+                        scrolled.image.height(),
+                    ),
+                    image: scrolled.image,
+                    window_title: None,
+                    app_name: None,
+                };
+                finish_capture(app, capture, settings).map(Some)
+            } else {
+                require_permission()?;
+                // The front-most window is the thing being scrolled; asking for
+                // a region first would mean the target loses focus, and a
+                // window that is not focused does not scroll.
+                let backend = backend();
+                let windows = backend.windows().map_err(err)?;
+                let target = windows
+                    .iter()
+                    .find(|w| w.is_focused)
+                    .or_else(|| windows.first())
+                    .ok_or("Kaydırılacak pencere bulunamadı.")?;
+
+                crate::scrolling::start(app, target.region).map_err(err)?;
+                Ok(None)
+            }
+        }
         M::LastRegion => Err("Son bölge henüz hazır değil.".into()),
         M::CustomRegion => Err("Özel bölge henüz hazır değil.".into()),
         M::AutoCapture => Err("Otomatik yakalama henüz hazır değil.".into()),
@@ -1740,4 +1779,25 @@ mod tests {
     fn a_zero_sized_clipboard_image_is_refused() {
         assert!(encode_clipboard_image(0, 10, Vec::new()).is_err());
     }
+}
+
+// ── Scrolling capture ───────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn scrolling_status(app: AppHandle) -> crate::scrolling::ScrollStatus {
+    app.state::<crate::scrolling::ScrollState>().status()
+}
+
+/// Start or finish a scrolling capture, whichever applies.
+///
+/// One command rather than two, because the caller is always toggling: a
+/// scrolling capture has no meaningful "start again while running".
+#[tauri::command]
+pub fn toggle_scrolling_capture(app: AppHandle) -> Result<Option<CaptureOutput>, String> {
+    dispatch_from_app(&app, CaptureMethod::ScrollingCapture)
+}
+
+#[tauri::command]
+pub fn cancel_scrolling_capture(app: AppHandle) {
+    crate::scrolling::cancel(&app);
 }

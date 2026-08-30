@@ -186,6 +186,8 @@ enum CaptureKind {
     ActiveWindow,
     Record,
     RecordGif,
+    /// Scrolling capture: starts it, or joins what has been captured.
+    Scrolling,
 }
 
 impl CaptureKind {
@@ -199,6 +201,7 @@ impl CaptureKind {
             CaptureKind::ActiveWindow => M::ActiveWindow,
             CaptureKind::Record => M::ScreenRecording,
             CaptureKind::RecordGif => M::ScreenRecordingGif,
+            CaptureKind::Scrolling => M::ScrollingCapture,
         }
     }
 }

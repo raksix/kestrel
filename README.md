@@ -44,6 +44,10 @@ that language exactly, so those files work unmodified.
 - Undo and redo while selecting
 - Window and display picker with live thumbnails, keyboard navigable
 - Multi-display capture with correct mixed-DPI compositing
+- Scrolling capture: press once, scroll the window yourself, press again. The
+  frames are joined by working out how far the content moved, and a scroll
+  that went too fast is reported as having gaps rather than quietly dropping
+  what fell between two frames
 
 **Annotate**
 - Editor with twelve tools and ShareX's keyboard letters, non-destructive so a
@@ -142,7 +146,7 @@ not capped at screen resolution.
 | 3 | Uploaders, `.sxcu` engine, history, destinations | ✅ |
 | 4 | Screen recording, GIF, video tools | 🚧 cursor effects left |
 | 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, thirteen tools done |
-| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 scrolling capture and distribution left |
+| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 distribution left |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·
 [`docs/01-FEATURE-PARITY.md`](docs/01-FEATURE-PARITY.md) ·
@@ -193,7 +197,7 @@ session cannot do.
 | Screen capture | ✅ | ✅ | ✅ | ✅ (portal) |
 | Window capture | ✅ | ✅ | ✅ | ❌ |
 | Global shortcuts | ✅ | ✅ | ✅ | ⚠️ DE-dependent |
-| Scrolling capture | ⚠️ | ✅ | ⚠️ | ❌ |
+| Scrolling capture | ✅ manual | ✅ manual | ✅ manual | ✅ manual |
 
 Wayland's restrictions are deliberate parts of the protocol, not bugs we can
 work around.

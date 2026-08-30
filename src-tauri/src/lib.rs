@@ -14,6 +14,7 @@ mod overlay;
 mod pin;
 mod record;
 mod rpc;
+mod scrolling;
 mod settings;
 mod shortcuts;
 mod uploads;
@@ -78,6 +79,7 @@ pub fn run() {
         .manage(ocr::OcrState::default())
         .manage(watch::WatchState::default())
         .manage(record::RecordState::default())
+        .manage(scrolling::ScrollState::default())
         .manage(shortcuts::ShortcutRegistry::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_displays,
@@ -141,6 +143,9 @@ pub fn run() {
             commands::start_recording,
             commands::stop_recording,
             commands::cancel_recording,
+            commands::scrolling_status,
+            commands::toggle_scrolling_capture,
+            commands::cancel_scrolling_capture,
             commands::set_recording_paused,
             commands::audio_options,
             commands::set_audio,
