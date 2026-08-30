@@ -108,6 +108,14 @@ that language exactly, so those files work unmodified.
   runs locally, so nothing is sent anywhere. The ~20 MB models are downloaded
   on first use, and only after you say so
 
+**System integration**
+- Double-click a `.sxcu` or `.sxie` to import it, and `kestrel://` links to
+  show the window or open a file. Both hand over to the instance that is
+  already running rather than starting a second copy
+- The URL scheme can show, import and edit — but not upload. A link is
+  something any web page can navigate to, and everything else it can do is
+  local and visible
+
 **Organise**
 - Capture history in SQLite, searchable by filename, window title, URL and
   recognised text
@@ -134,7 +142,7 @@ not capped at screen resolution.
 | 3 | Uploaders, `.sxcu` engine, history, destinations | ✅ |
 | 4 | Screen recording, GIF, video tools | 🚧 cursor effects left |
 | 5 | The remaining tools, effect chain, OCR | 🚧 effects and OCR done, thirteen tools done |
-| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 CLI, RPC and watch folder done |
+| 6 | CLI, integrations, scrolling capture, 1.0 | 🚧 scrolling capture and distribution left |
 
 Full plans: [`docs/00-PLAN.md`](docs/00-PLAN.md) ·
 [`docs/01-FEATURE-PARITY.md`](docs/01-FEATURE-PARITY.md) ·

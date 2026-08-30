@@ -70,6 +70,9 @@ enum Command {
 struct Controller {
     commands: Sender<Command>,
     status: Arc<Mutex<RecordingStatus>>,
+    /// The recorded frame size, kept so the finished file can be described in
+    /// the history without decoding it back off disk.
+    size: (u32, u32),
 }
 
 #[derive(Default)]
@@ -137,6 +140,14 @@ pub fn start(
         None => primary_display()?,
     };
 
+    // The frame size, resolved here so the finished file can be described in
+    // the history without decoding it back off disk. A region records its own
+    // bounds; a whole display records the display's.
+    let size = match region {
+        Some(region) => (region.width, region.height),
+        None => display_size(display_id).unwrap_or((0, 0)),
+    };
+
     std::fs::create_dir_all(output_dir)?;
     let extension = match settings.format {
         kestrel_record::OutputFormat::Gif => "gif",
@@ -183,7 +194,11 @@ pub fn start(
 
     tracing::info!(path = %output.display(), "recording started");
     let snapshot = status.lock().expect("status mutex poisoned").clone();
-    *state.0.lock().expect("record mutex poisoned") = Some(Controller { commands, status });
+    *state.0.lock().expect("record mutex poisoned") = Some(Controller {
+        commands,
+        status,
+        size,
+    });
     Ok(snapshot)
 }
 
@@ -222,6 +237,35 @@ fn own_recording(
     }
 }
 
+/// The size of one display in *physical* pixels.
+///
+/// `DisplayInfo::region` is in logical points, and the recorder captures actual
+/// pixels — so on a Retina panel the two differ by a factor of two. Recording
+/// the logical size put a 3420x2224 video in the library labelled 1710x1112,
+/// which is the sort of wrong that nobody notices until they rely on it.
+///
+/// `None` rather than an error: a missing size costs a "0 x 0" in the library,
+/// which is not worth failing a recording over.
+fn display_size(id: u32) -> Option<(u32, u32)> {
+    use kestrel_capture::CaptureBackend;
+    kestrel_capture::backend()
+        .displays()
+        .ok()?
+        .into_iter()
+        .find(|d| d.id == id)
+        .map(|d| {
+            let scale = if d.scale_factor > 0.0 {
+                d.scale_factor
+            } else {
+                1.0
+            };
+            (
+                (d.region.width as f32 * scale).round() as u32,
+                (d.region.height as f32 * scale).round() as u32,
+            )
+        })
+}
+
 fn primary_display() -> Result<u32> {
     use kestrel_capture::CaptureBackend;
     let displays = kestrel_capture::backend()
@@ -236,7 +280,14 @@ fn primary_display() -> Result<u32> {
 }
 
 /// Stop and finalise, returning the file that was written.
-pub fn stop(state: &RecordState) -> Result<PathBuf> {
+/// What a finished recording produced.
+pub struct Finished {
+    pub path: PathBuf,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub fn stop(state: &RecordState) -> Result<Finished> {
     let controller = state
         .0
         .lock()
@@ -253,7 +304,11 @@ pub fn stop(state: &RecordState) -> Result<PathBuf> {
     // Finalising waits for ffmpeg to flush and close the container, which for a
     // long clip is not instant.
     match result.recv_timeout(Duration::from_secs(60)) {
-        Ok(Ok(path)) => Ok(path),
+        Ok(Ok(path)) => Ok(Finished {
+            path,
+            width: controller.size.0,
+            height: controller.size.1,
+        }),
         Ok(Err(message)) => Err(kestrel_record::recorder::RecordError::Capture(message).into()),
         Err(_) => Err(RecordAppError::ThreadGone),
     }

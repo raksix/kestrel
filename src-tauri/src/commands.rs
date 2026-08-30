@@ -1033,9 +1033,32 @@ fn start_recording_inner(
 
 #[tauri::command]
 pub fn stop_recording(app: AppHandle) -> Result<String, String> {
-    let path = crate::record::stop(&app.state::<crate::record::RecordState>()).map_err(err)?;
-    let path = path.to_string_lossy().into_owned();
+    let finished = crate::record::stop(&app.state::<crate::record::RecordState>()).map_err(err)?;
+    let path = finished.path.to_string_lossy().into_owned();
     tracing::info!(%path, "recording finished");
+
+    // A recording is a capture: it goes in the history like one, or the library
+    // shows every screenshot and none of the videos, which is what happened
+    // until now. Failing to record it must not lose the file, which is already
+    // on disk by this point.
+    let entry = crate::history::NewEntry {
+        filename: finished
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.clone()),
+        path: Some(path.clone()),
+        width: finished.width,
+        height: finished.height,
+        window_title: None,
+    };
+    match app
+        .state::<crate::history::History>()
+        .insert(&entry, chrono::Utc::now().timestamp())
+    {
+        Ok(id) => app.state::<crate::history::LastEntryId>().set(id),
+        Err(err) => tracing::warn!(%err, "could not record the recording in history"),
+    }
 
     let _ = app.emit(
         crate::EVENT_RECORDING_CHANGED,
@@ -1234,11 +1257,10 @@ pub fn dispatch(
         // by a shortcut gets stopped, since there is no window to click.
         M::ScreenRecording | M::ScreenRecordingGif => {
             if app.state::<crate::record::RecordState>().is_active() {
-                crate::record::stop(&app.state::<crate::record::RecordState>()).map_err(err)?;
-                let _ = app.emit(
-                    crate::EVENT_RECORDING_CHANGED,
-                    app.state::<crate::record::RecordState>().status(),
-                );
+                // The same call the UI makes, so the tray and the shortcut
+                // cannot end up recording to a different place — or, as they
+                // did, failing to record it in the history at all.
+                stop_recording(app.clone())?;
             } else {
                 let gif = matches!(method, M::ScreenRecordingGif);
                 let audio = app.state::<SettingsState>().snapshot().audio;

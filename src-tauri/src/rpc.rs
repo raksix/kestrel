@@ -174,6 +174,18 @@ fn handle(app: &AppHandle, stream: TcpStream, token: &str) {
     let _ = writer.write_all(&body);
 }
 
+/// Perform a request that did not come over the socket.
+///
+/// The command line and the OS's file-open event produce the same instructions
+/// as a remote caller, so they run through the same code rather than a parallel
+/// path that could drift.
+pub fn act_on(app: &AppHandle, request: Request) {
+    let response = dispatch(app, request);
+    if let Response::Error { message } = response {
+        tracing::warn!(%message, "could not act on the launch argument");
+    }
+}
+
 fn dispatch(app: &AppHandle, request: Request) -> Response {
     match request {
         Request::Ping => Response::ok("kestrel is running"),

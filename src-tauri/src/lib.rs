@@ -8,6 +8,7 @@ mod capture_service;
 mod commands;
 mod editor;
 mod history;
+mod launch;
 mod ocr;
 mod overlay;
 mod pin;
@@ -48,7 +49,21 @@ pub fn run() {
         )
         .init();
 
+    // Anything the OS handed us — a double-clicked .sxcu, a kestrel:// link —
+    // goes to the instance that is already running, if there is one. Doing this
+    // before the builder means no window is created only to be thrown away.
+    let intent = launch::intent_from_args(std::env::args());
+    if let Some(intent) = &intent {
+        if launch::forward(intent) {
+            return;
+        }
+    }
+
     tauri::Builder::default()
+        // Registers the kestrel:// scheme with the OS and delivers links that
+        // arrive while the app is already running. Without it the scheme in
+        // tauri.conf.json would be a setting that does nothing.
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
@@ -147,20 +162,47 @@ pub fn run() {
             commands::watch_status,
             commands::set_watch,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             build_tray(app.handle())?;
             shortcuts::reregister(app.handle());
             resume_watch(app.handle());
             rpc::serve(app.handle());
+
+            // Nothing was running to hand this to, so this instance is the one
+            // that acts on it — after setup, so the editor and the uploader
+            // have their state.
+            if let Some(intent) = intent.clone() {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || rpc::act_on(&handle, intent.to_request()));
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while running Kestrel")
-        .run(|_app, event| {
+        .run(|app, event| {
             // Drop the endpoint file on the way out, so `kestrel capture`
             // reports "not running" instead of failing to reach a dead port.
-            if matches!(event, tauri::RunEvent::Exit) {
-                rpc::withdraw();
+            match event {
+                tauri::RunEvent::Exit => rpc::withdraw(),
+                // macOS delivers a double-clicked file or a URL as an event
+                // rather than on the command line, and it can arrive long after
+                // launch — every subsequent double-click on a running app comes
+                // this way.
+                tauri::RunEvent::Opened { urls } => {
+                    for url in urls {
+                        let Some(intent) = launch::parse_argument(url.as_str()).or_else(|| {
+                            url.to_file_path()
+                                .ok()
+                                .and_then(|path| launch::parse_argument(&path.to_string_lossy()))
+                        }) else {
+                            continue;
+                        };
+                        let handle = app.clone();
+                        std::thread::spawn(move || rpc::act_on(&handle, intent.to_request()));
+                        break;
+                    }
+                }
+                _ => {}
             }
         });
 }

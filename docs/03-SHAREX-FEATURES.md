@@ -485,7 +485,7 @@ yazıyor.
 |---|:-:|:-:|---|
 | Sistem tepsisi menüsü | `[x]` | 1 | |
 | Dosya yöneticisi bağlam menüsü | `[ ]` | 6 | Quick Action / shell verb / `.desktop` |
-| `.sxcu` / `.sxie` dosya ilişkilendirme | `[ ]` | 6 | |
+| `.sxcu` / `.sxie` dosya ilişkilendirme | `[x]` | 6 | çalışan örneğe devredilir |
 | URL şeması `kestrel://` | `[ ]` | 6 | |
 | Sürükle-bırak (tepsiye dosya bırak) | `[ ]` | 3 | |
 | Bildirimler + tıklama eylemleri | `[ ]` | 3 | |
