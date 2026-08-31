@@ -312,6 +312,13 @@
 
 /* ── Region recording ───────────────────────────────────────────────── */
 
+/* The crosshair goes red before anything is selected, so the mode is obvious
+   from the first frame rather than only from reading the toolbar. */
+.overlay--record .overlay__crosshair {
+  background: rgb(255 95 87 / 0.55);
+}
+
+
 /* The toolbar is one row of decisions instead of two rows of tools, so it
    should not be as wide as the annotation one. */
 .overlay__toolbar--record {

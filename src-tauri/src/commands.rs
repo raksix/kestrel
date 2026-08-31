@@ -529,12 +529,11 @@ pub fn begin_region_recording(app: AppHandle, gif: Option<bool>) -> Result<(), S
     // Said before the overlay covers the screen rather than after the user has
     // framed a rectangle: ffmpeg is what writes the file, and finding out it is
     // missing at the end wastes the whole gesture.
-    if !crate::record::ffmpeg_status().available {
+    let ffmpeg = crate::record::ffmpeg_status();
+    if !ffmpeg.available {
         return Err(format!(
             "Ekran kaydı için ffmpeg gerekiyor. Kur ve tekrar dene — {}",
-            crate::record::ffmpeg_status()
-                .install_hint
-                .unwrap_or_default()
+            ffmpeg.install_hint.unwrap_or_default()
         ));
     }
     overlay::begin_region_recording(&app, gif.unwrap_or(false))
@@ -555,11 +554,17 @@ const OVERLAY_TEARDOWN: std::time::Duration = std::time::Duration::from_millis(3
 /// in the *physical pixels of one display* — those are different numbers on
 /// every Retina panel, and getting it wrong records the wrong quarter of the
 /// screen.
+///
+/// `async` on purpose, even though nothing here is awaited: a synchronous
+/// command runs on the main thread, and this one both waits for the overlays to
+/// go away and then waits for the recorder's first frame. On the main thread
+/// that wait *is* the thing stopping the overlays from closing, so the overlay
+/// would still be up when the first frame was taken — the one artefact this
+/// whole path exists to avoid.
 #[tauri::command]
-pub fn commit_region_recording(
+pub async fn commit_region_recording(
     app: AppHandle,
     region: Region,
-    settings: State<'_, SettingsState>,
 ) -> Result<crate::record::RecordingStatus, String> {
     if region.width < 1 || region.height < 1 {
         overlay::finish(&app);
@@ -571,7 +576,7 @@ pub fn commit_region_recording(
 
     std::thread::sleep(OVERLAY_TEARDOWN);
 
-    let snapshot = settings.snapshot();
+    let snapshot = app.state::<SettingsState>().snapshot();
     let started = start_recording_inner(
         &app,
         gif,
@@ -612,19 +617,29 @@ fn display_region(region: Region) -> Result<(u32, Region), String> {
         .or_else(|| displays.first())
         .ok_or("Ekran bulunamadı.")?;
 
-    let scale = if target.scale_factor > 0.0 {
-        target.scale_factor
+    Ok((target.id, local_region(region, target)))
+}
+
+/// A global logical rectangle expressed in one display's physical pixels.
+///
+/// Two conversions in one step, and both have bitten this codebase before: the
+/// origin is relative to the display rather than to the desktop, and the whole
+/// rectangle is in pixels rather than points. On a Retina panel skipping the
+/// scale records a quarter of the intended area, from the wrong corner.
+fn local_region(region: Region, display: &DisplayInfo) -> Region {
+    let scale = if display.scale_factor > 0.0 {
+        display.scale_factor
     } else {
         1.0
     };
 
-    let local = Region::new(
-        (((region.x - target.region.x) as f32) * scale).round() as i32,
-        (((region.y - target.region.y) as f32) * scale).round() as i32,
+    Region::new(
+        (((region.x - display.region.x) as f32) * scale).round() as i32,
+        (((region.y - display.region.y) as f32) * scale).round() as i32,
+        // Never zero: ffmpeg rejects a stream with a zero-sized frame outright.
         ((region.width as f32 * scale).round() as u32).max(1),
         ((region.height as f32 * scale).round() as u32).max(1),
-    );
-    Ok((target.id, local))
+    )
 }
 
 // ── Picker ──────────────────────────────────────────────────────────────
@@ -1997,6 +2012,59 @@ mod tests {
     #[test]
     fn a_zero_sized_clipboard_image_is_refused() {
         assert!(encode_clipboard_image(0, 10, Vec::new()).is_err());
+    }
+
+    // ── Region recording geometry ───────────────────────────────────────
+
+    fn display(x: i32, y: i32, width: u32, height: u32, scale: f32) -> DisplayInfo {
+        DisplayInfo {
+            id: 1,
+            name: "Test".into(),
+            region: Region::new(x, y, width, height),
+            scale_factor: scale,
+            is_primary: true,
+        }
+    }
+
+    #[test]
+    fn a_selection_on_a_retina_display_is_converted_to_pixels() {
+        // The overlay works in logical points; the recorder crops raw frames,
+        // which are physical pixels. Skipping this doubling records a quarter
+        // of the area the user drew.
+        let local = local_region(Region::new(100, 50, 400, 300), &display(0, 0, 1710, 1112, 2.0));
+
+        assert_eq!((local.x, local.y), (200, 100));
+        assert_eq!((local.width, local.height), (800, 600));
+    }
+
+    #[test]
+    fn a_selection_on_a_second_display_is_relative_to_that_display() {
+        // A rectangle at global x=2000 on a display that starts at x=1920 is
+        // 80 points in, not 2000 — cropping at 2000 reads off the end.
+        let local = local_region(
+            Region::new(2000, 100, 200, 100),
+            &display(1920, 0, 1920, 1080, 1.0),
+        );
+
+        assert_eq!((local.x, local.y), (80, 100));
+        assert_eq!((local.width, local.height), (200, 100));
+    }
+
+    #[test]
+    fn a_display_reporting_no_scale_is_treated_as_one_to_one() {
+        // A zero scale factor would otherwise collapse the region to nothing.
+        let local = local_region(Region::new(10, 10, 100, 80), &display(0, 0, 1920, 1080, 0.0));
+
+        assert_eq!((local.width, local.height), (100, 80));
+    }
+
+    #[test]
+    fn a_region_is_never_empty() {
+        // ffmpeg refuses a stream whose frames have a zero dimension, so a
+        // sub-pixel selection has to round up rather than down.
+        let local = local_region(Region::new(0, 0, 0, 0), &display(0, 0, 1920, 1080, 1.0));
+
+        assert!(local.width >= 1 && local.height >= 1);
     }
 }
 

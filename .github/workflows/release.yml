@@ -81,25 +81,47 @@ jobs:
       - name: Build the command-line binary
         run: cargo build --release -p kestrel-cli ${{ matrix.args }}
 
-      - uses: tauri-apps/tauri-action@v0
+      # Export the signing credentials only when they are actually set.
+      #
+      # An empty environment variable is still a *set* environment variable, and
+      # Tauri checks presence rather than content — so passing an unset secret
+      # straight through made it try to import an empty certificate into the
+      # keychain and fail the whole build. Nothing is exported here unless it
+      # has a value, which leaves Tauri on the ad-hoc identity from
+      # tauri.conf.json.
+      - name: Export signing credentials if they exist
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          # Real signing, used only if these repository secrets exist. With
-          # them the build is signed with a Developer ID and notarised, and
-          # macOS opens it without complaint. Without them Tauri falls back to
-          # the ad-hoc identity in tauri.conf.json, which is what stops macOS
-          # calling the app "damaged" — see the release notes for why that is
-          # still not the same as being notarised.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          exported=0
+          for name in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE \
+                      APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD \
+                      APPLE_TEAM_ID WINDOWS_CERTIFICATE \
+                      WINDOWS_CERTIFICATE_PASSWORD; do
+            value="${!name}"
+            if [ -n "$value" ]; then
+              echo "$name=$value" >> "$GITHUB_ENV"
+              exported=$((exported + 1))
+            fi
+          done
+
+          if [ "$exported" -eq 0 ]; then
+            echo "No signing secrets set; building ad-hoc signed."
+          else
+            echo "Exported $exported signing credential(s)."
+          fi
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: Kestrel ${{ github.event.inputs.tag || github.ref_name }}

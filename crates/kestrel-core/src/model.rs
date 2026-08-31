@@ -639,4 +639,73 @@ mod tests {
         assert_eq!(back.filename_pattern, settings.filename_pattern);
         assert_eq!(back.after_capture, settings.after_capture);
     }
+
+    #[test]
+    fn every_recording_method_is_recognised_as_one() {
+        // The dispatch decides between "capture now" and "start/stop a
+        // recording" from this alone, so a method missing here would try to
+        // take a screenshot with the recorder's settings.
+        for method in [
+            CaptureMethod::ScreenRecording,
+            CaptureMethod::ScreenRecordingGif,
+            CaptureMethod::RegionRecording,
+            CaptureMethod::RegionRecordingGif,
+        ] {
+            assert!(method.is_recording(), "{method:?}");
+        }
+        assert!(!CaptureMethod::Region.is_recording());
+        assert!(!CaptureMethod::Fullscreen.is_recording());
+    }
+
+    #[test]
+    fn only_the_gif_variants_ask_for_a_gif() {
+        assert!(CaptureMethod::RegionRecordingGif.is_gif());
+        assert!(CaptureMethod::ScreenRecordingGif.is_gif());
+        assert!(!CaptureMethod::RegionRecording.is_gif());
+        assert!(!CaptureMethod::ScreenRecording.is_gif());
+    }
+
+    #[test]
+    fn recording_a_region_needs_the_selection_overlay() {
+        // Both region families share one overlay; recording a whole display
+        // needs no selection at all.
+        assert!(CaptureMethod::RegionRecording.needs_region_selection());
+        assert!(CaptureMethod::RegionRecordingGif.needs_region_selection());
+        assert!(CaptureMethod::Region.needs_region_selection());
+        assert!(!CaptureMethod::ScreenRecording.needs_region_selection());
+        assert!(!CaptureMethod::Fullscreen.needs_region_selection());
+    }
+
+    #[test]
+    fn region_recording_ships_as_a_default_workflow() {
+        // It is the recording people reach for most, and a feature reachable
+        // only from the tray is a feature most users never find.
+        let workflows = default_workflows();
+        let region_record = workflows
+            .iter()
+            .find(|w| w.method == CaptureMethod::RegionRecording)
+            .expect("a region recording workflow ships by default");
+
+        assert!(region_record.shortcut.is_some());
+        assert!(
+            system_reserved(region_record.shortcut.as_deref().unwrap()).is_none(),
+            "a default the operating system eats is a dead key"
+        );
+        assert!(
+            !fallback_shortcuts(&region_record.id).is_empty(),
+            "it needs somewhere to go when its default is taken"
+        );
+    }
+
+    #[test]
+    fn no_two_default_workflows_share_a_shortcut() {
+        // Adding a workflow is exactly when this gets broken, and the loser is
+        // silent: one of the two simply never fires.
+        let workflows = default_workflows();
+        let mut seen: Vec<&str> = Vec::new();
+        for shortcut in workflows.iter().filter_map(|w| w.shortcut.as_deref()) {
+            assert!(!seen.contains(&shortcut), "{shortcut} is bound twice");
+            seen.push(shortcut);
+        }
+    }
 }
