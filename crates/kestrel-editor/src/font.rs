@@ -138,13 +138,45 @@ fn line_width(font: &FontVec, size: f32, line: &str) -> f32 {
     width
 }
 
+/// Concrete sans-serif families to try when the generic one resolves to
+/// nothing.
+///
+/// `Family::SansSerif` is not a font, it is a name fontdb looks up — and its
+/// default is Arial, which most Linux installs do not have. Asking only for
+/// the generic family meant no text at all on a machine with a perfectly good
+/// DejaVu, which is how a CI runner and a plain Debian desktop both behave.
+const FALLBACKS: [&str; 9] = [
+    "DejaVu Sans",
+    "Liberation Sans",
+    "Noto Sans",
+    "Cantarell",
+    "Ubuntu",
+    "Helvetica Neue",
+    "Helvetica",
+    "Segoe UI",
+    "Arial",
+];
+
 fn query(db: &fontdb::Database, weight: fontdb::Weight, style: fontdb::Style) -> Option<FontVec> {
-    let id = db.query(&fontdb::Query {
-        families: &[fontdb::Family::SansSerif],
-        weight,
-        stretch: fontdb::Stretch::Normal,
-        style,
-    })?;
+    let ask = |families: &[fontdb::Family]| {
+        db.query(&fontdb::Query {
+            families,
+            weight,
+            stretch: fontdb::Stretch::Normal,
+            style,
+        })
+    };
+
+    let id = ask(&[fontdb::Family::SansSerif])
+        .or_else(|| {
+            FALLBACKS
+                .iter()
+                .find_map(|name| ask(&[fontdb::Family::Name(name)]))
+        })
+        // Last resort: whatever the system has. A capture annotated in a serif
+        // face is a cosmetic disappointment; one annotated in nothing at all is
+        // a lost annotation.
+        .or_else(|| db.faces().next().map(|face| face.id))?;
 
     // A font collection (.ttc) holds several faces; the index matters.
     db.with_face_data(id, |data, index| {
@@ -163,6 +195,22 @@ mod tests {
         assert!(
             system().is_some(),
             "no system sans-serif font could be loaded"
+        );
+    }
+
+    #[test]
+    fn a_font_is_found_without_the_generic_family_resolving() {
+        // fontdb's generic sans-serif defaults to Arial, which most Linux
+        // installs do not have — so asking only for the generic family meant no
+        // text at all there. This is that case: a database holding one font
+        // whose name is in neither the generic mapping nor anything else.
+        let mut db = fontdb::Database::new();
+        db.load_system_fonts();
+        db.set_sans_serif_family("A Font Nobody Has");
+
+        assert!(
+            query(&db, fontdb::Weight::NORMAL, fontdb::Style::Normal).is_some(),
+            "a face should still be found when the generic family resolves to nothing"
         );
     }
 

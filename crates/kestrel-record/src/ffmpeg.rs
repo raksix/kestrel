@@ -117,11 +117,45 @@ pub fn find() -> Option<PathBuf> {
     COMMON.iter().map(PathBuf::from).find(|path| path.is_file())
 }
 
+/// Look for `program` on `PATH`.
+///
+/// On Windows the file is `ffmpeg.exe`, and joining the bare name finds
+/// nothing — so a perfectly good installation was reported as missing and
+/// recording and conversion were unavailable to every Windows user. The
+/// extensions come from `PATHEXT` where it is set, because that is the list
+/// the shell itself uses, with a fallback for when it is not.
 fn which(program: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join(program))
-        .find(|candidate| candidate.is_file())
+
+    for dir in std::env::split_paths(&path) {
+        for candidate in candidates(&dir, program) {
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+fn candidates(dir: &std::path::Path, program: &str) -> Vec<PathBuf> {
+    // The bare name first: on Unix it is the only one, and on Windows an
+    // extensionless file would still be the closer match.
+    let mut names = vec![dir.join(program)];
+
+    if cfg!(windows) {
+        let extensions =
+            std::env::var("PATHEXT").unwrap_or_else(|_| ".EXE;.CMD;.BAT;.COM".to_string());
+
+        names.extend(
+            extensions
+                .split(';')
+                .map(str::trim)
+                .filter(|extension| !extension.is_empty())
+                .map(|extension| dir.join(format!("{program}{extension}"))),
+        );
+    }
+
+    names
 }
 
 /// The version string ffmpeg reports, for the settings UI.
@@ -225,6 +259,36 @@ const EVEN_DIMENSIONS: &str = "scale=trunc(iw/2)*2:trunc(ih/2)*2";
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_bare_name_is_always_tried_first() {
+        let names = candidates(std::path::Path::new("/bin"), "ffmpeg");
+        assert_eq!(names[0], std::path::Path::new("/bin").join("ffmpeg"));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_looks_for_the_executable_extension() {
+        // Without this, a perfectly good ffmpeg.exe on PATH is reported as
+        // missing and recording is unavailable on every Windows machine.
+        let names = candidates(std::path::Path::new("C:\\tools"), "ffmpeg");
+        let found: Vec<String> = names
+            .iter()
+            .map(|p| p.to_string_lossy().to_lowercase())
+            .collect();
+
+        assert!(
+            found.iter().any(|name| name.ends_with("ffmpeg.exe")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn other_platforms_do_not_invent_extensions() {
+        let names = candidates(std::path::Path::new("/usr/bin"), "ffmpeg");
+        assert_eq!(names.len(), 1);
+    }
 
     #[test]
     fn a_silent_recording_mentions_no_audio_at_all() {
