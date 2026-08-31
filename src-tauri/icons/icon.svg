@@ -2,74 +2,111 @@
   <title>Kestrel</title>
 
   <!--
-    A raptor's eye that is also a lens aperture.
+    A lens aperture in a kestrel's colours.
 
-    Kestrels are known for their eyesight — they hover and watch, which is a
-    fair description of what a capture tool does while it waits for you to pick
-    something. An aperture alone would read as a generic camera app; the brow
-    over the top is what makes it a bird of prey, and it is the one asymmetric
-    shape in the mark.
+    Everything is computed. The six blades are real polygons that tile the
+    annulus exactly — equal areas, no gaps, no overlap — rather than a disc with
+    lines drawn on top, which is what the first version was and why it looked
+    flat. Each blade then takes its own tone from one light in the upper left,
+    so the facets separate the way metal does rather than by being outlined.
 
-    The geometry is computed, not drawn. The opening is a hexagon at radius 68;
-    each blade seam runs from one of its vertices to the outer circle sixty
-    degrees on, which is the slant a real blade edge has — a radial line would
-    read as a pie chart. An earlier version cut the blades as chords through
-    the middle and came out as a starburst, which is what happens when the
-    construction is guessed instead of worked out.
+    The opening is a hexagon at radius 58 and each blade runs from one of its
+    vertices out to the housing sixty degrees on, which is the slant a real
+    blade edge has. An earlier attempt cut chords through the middle and came
+    out as a starburst; a radial line would have read as a pie chart.
+
+    Two things were tried and removed for looking cheap rather than crafted: a
+    specular arc with a highlight dot, which read as moulded plastic, and a soft
+    top light across the whole disc, which turned it into a sphere. An aperture
+    is flat blades, and the directional gradient carries the light on its own.
+
+    There is no bird in it. A brow ridge was attempted twice — cut out of the
+    iris it looked like the circle had been clipped by mistake, drawn solid it
+    looked like a hat. For a screenshot tool the camera reading is not wrong.
   -->
 
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0.35" y2="1">
-      <stop offset="0" stop-color="#232A40" />
-      <stop offset="1" stop-color="#0D1119" />
+    <linearGradient id="tile" x1="0.15" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#2C3450" />
+      <stop offset="0.55" stop-color="#161B29" />
+      <stop offset="1" stop-color="#090C12" />
     </linearGradient>
 
-    <!-- Rufous through amber: a kestrel's own colours, and warm enough to hold
-         up against a dark tile at 16 pixels. -->
-    <linearGradient id="iris" x1="0.18" y1="0" x2="0.86" y2="1">
-      <stop offset="0" stop-color="#FFCE7A" />
-      <stop offset="0.45" stop-color="#F09A42" />
-      <stop offset="1" stop-color="#C2551F" />
+    <!-- One light for the whole disc, in user space, so the gradient runs
+         continuously across the blades instead of restarting inside each. -->
+    <linearGradient id="iris" gradientUnits="userSpaceOnUse" x1="130" y1="100" x2="382" y2="412">
+      <stop offset="0" stop-color="#FFDCA6" />
+      <stop offset="0.35" stop-color="#F0A040" />
+      <stop offset="0.72" stop-color="#D2701F" />
+      <stop offset="1" stop-color="#9C3F14" />
     </linearGradient>
 
-    <radialGradient id="pupil" cx="0.36" cy="0.3" r="0.9">
-      <stop offset="0" stop-color="#28304A" />
-      <stop offset="1" stop-color="#06080E" />
+    <!-- A dark ring at the housing so the aperture sits in the tile rather than
+         on it. Kept shallow: any deeper and the disc domes. -->
+    <radialGradient id="rim" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.9" stop-color="#000000" stop-opacity="0" />
+      <stop offset="1" stop-color="#000000" stop-opacity="0.42" />
     </radialGradient>
 
-    <!-- The brow is its own dark amber rather than the tile colour, so it
-         reads as a ridge overhanging the eye. Cutting it out of the iris was
-         tried first and looked like the circle had been clipped by mistake. -->
-    <linearGradient id="ridge" x1="0" y1="0" x2="0.6" y2="1">
-      <stop offset="0" stop-color="#7A3A14" />
-      <stop offset="1" stop-color="#4A2210" />
-    </linearGradient>
+    <radialGradient id="pupil" cx="0.34" cy="0.28" r="0.95">
+      <stop offset="0" stop-color="#1C2338" />
+      <stop offset="0.65" stop-color="#080B12" />
+      <stop offset="1" stop-color="#010204" />
+    </radialGradient>
+
+    <!-- Bounce off the blades onto the lower right of the opening. Small, but
+         it is what stops the pupil reading as a hole punched in paper. -->
+    <radialGradient id="bounce" cx="0.74" cy="0.8" r="0.55">
+      <stop offset="0" stop-color="#C4682C" stop-opacity="0.45" />
+      <stop offset="1" stop-color="#C4682C" stop-opacity="0" />
+    </radialGradient>
+
+    <filter id="cast" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
   </defs>
 
   <rect width="512" height="512" rx="114" fill="url(#tile)" />
 
-  <g>
-    <circle cx="256" cy="256" r="152" fill="url(#iris)" />
+  <!-- A hairline of light along the top edge, the way a physical tile catches
+       it. Traced along the corner radius so it stops where the tile does. -->
+  <path d="M114 1 h284 a113 113 0 0 1 113 113" fill="none" stroke="#FFFFFF" stroke-opacity="0.15" stroke-width="2" />
 
-    <!-- Blade seams. Cut in the tile colour so they are the same gaps the brow
-         is, rather than a third tone competing with the two that matter. -->
-    <g stroke="#0D1119" stroke-width="11" stroke-linecap="round" opacity="0.92" fill="none">
-      <path d="M256.0 188.0 L387.6 180.0" />
-      <path d="M314.9 222.0 L387.6 332.0" />
-      <path d="M314.9 290.0 L256.0 408.0" />
-      <path d="M256.0 324.0 L124.4 332.0" />
-      <path d="M197.1 290.0 L124.4 180.0" />
-      <path d="M197.1 222.0 L256.0 104.0" />
-    </g>
-
-    <!-- The opening, from the same six vertices the seams start at. -->
-    <path
-      d="M256.0 188.0 L314.9 222.0 L314.9 290.0 L256.0 324.0 L197.1 290.0 L197.1 222.0 Z"
-      fill="url(#pupil)"
-    />
-
-    <!-- One catchlight. It is the difference between an eye and a diagram. -->
-    <circle cx="236" cy="236" r="13" fill="#FFFFFF" opacity="0.85" />
-
+  <g filter="url(#cast)">
+    <path d="M256.00 198.00 L403.22 171.00 A170.00 170.00 0 0 1 403.22 341.00 L306.23 227.00 Z" fill="url(#iris)" />
+    <path d="M256.00 198.00 L403.22 171.00 A170.00 170.00 0 0 1 403.22 341.00 L306.23 227.00 Z" fill="#000000" opacity="0.103" />
+    <path d="M306.23 227.00 L403.22 341.00 A170.00 170.00 0 0 1 256.00 426.00 L306.23 285.00 Z" fill="url(#iris)" />
+    <path d="M306.23 227.00 L403.22 341.00 A170.00 170.00 0 0 1 256.00 426.00 L306.23 285.00 Z" fill="#000000" opacity="0.248" />
+    <path d="M306.23 285.00 L256.00 426.00 A170.00 170.00 0 0 1 108.78 341.00 L256.00 314.00 Z" fill="url(#iris)" />
+    <path d="M306.23 285.00 L256.00 426.00 A170.00 170.00 0 0 1 108.78 341.00 L256.00 314.00 Z" fill="#000000" opacity="0.145" />
+    <path d="M256.00 314.00 L108.78 341.00 A170.00 170.00 0 0 1 108.78 171.00 L205.77 285.00 Z" fill="url(#iris)" />
+    <path d="M256.00 314.00 L108.78 341.00 A170.00 170.00 0 0 1 108.78 171.00 L205.77 285.00 Z" fill="#FFFFFF" opacity="0.103" />
+    <path d="M205.77 285.00 L108.78 171.00 A170.00 170.00 0 0 1 256.00 86.00 L205.77 227.00 Z" fill="url(#iris)" />
+    <path d="M205.77 285.00 L108.78 171.00 A170.00 170.00 0 0 1 256.00 86.00 L205.77 227.00 Z" fill="#FFFFFF" opacity="0.248" />
+    <path d="M205.77 227.00 L256.00 86.00 A170.00 170.00 0 0 1 403.22 171.00 L256.00 198.00 Z" fill="url(#iris)" />
+    <path d="M205.77 227.00 L256.00 86.00 A170.00 170.00 0 0 1 403.22 171.00 L256.00 198.00 Z" fill="#FFFFFF" opacity="0.145" />
   </g>
+
+  <!-- Seams. A dark line with a lighter one just outside it reads as a
+       bevelled edge; one flat line reads as a drawing of one. -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M256.00 198.00 L403.22 171.00" stroke="#401C08" stroke-opacity="0.42" stroke-width="3" />
+    <path d="M256.32 199.77 L403.55 172.77" stroke="#FFE9C8" stroke-opacity="0.34" stroke-width="1.4" />
+    <path d="M306.23 227.00 L403.22 341.00" stroke="#401C08" stroke-opacity="0.42" stroke-width="3" />
+    <path d="M304.86 228.17 L401.85 342.17" stroke="#FFE9C8" stroke-opacity="0.34" stroke-width="1.4" />
+    <path d="M306.23 285.00 L256.00 426.00" stroke="#401C08" stroke-opacity="0.42" stroke-width="3" />
+    <path d="M304.53 284.40 L254.30 425.40" stroke="#FFE9C8" stroke-opacity="0.34" stroke-width="1.4" />
+    <path d="M256.00 314.00 L108.78 341.00" stroke="#401C08" stroke-opacity="0.42" stroke-width="3" />
+    <path d="M255.68 312.23 L108.45 339.23" stroke="#FFE9C8" stroke-opacity="0.34" stroke-width="1.4" />
+    <path d="M205.77 285.00 L108.78 171.00" stroke="#401C08" stroke-opacity="0.42" stroke-width="3" />
+    <path d="M207.14 283.83 L110.15 169.83" stroke="#FFE9C8" stroke-opacity="0.34" stroke-width="1.4" />
+    <path d="M205.77 227.00 L256.00 86.00" stroke="#401C08" stroke-opacity="0.42" stroke-width="3" />
+    <path d="M207.47 227.60 L257.70 86.60" stroke="#FFE9C8" stroke-opacity="0.34" stroke-width="1.4" />
+  </g>
+
+  <circle cx="256.0" cy="256.0" r="170.0" fill="url(#rim)" />
+
+  <path d="M256.00 198.00 L306.23 227.00 L306.23 285.00 L256.00 314.00 L205.77 285.00 L205.77 227.00 Z" fill="url(#pupil)" />
+  <path d="M256.00 198.00 L306.23 227.00 L306.23 285.00 L256.00 314.00 L205.77 285.00 L205.77 227.00 Z" fill="url(#bounce)" />
+  <path d="M256.00 198.00 L306.23 227.00 L306.23 285.00 L256.00 314.00 L205.77 285.00 L205.77 227.00 Z" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="2.5" />
 </svg>
