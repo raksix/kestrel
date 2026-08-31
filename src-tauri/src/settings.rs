@@ -299,6 +299,19 @@ mod tests {
         assert_eq!(bound.len(), count, "shortcuts must stay unique: {bound:?}");
     }
 
+    /// What the first release shipped, and what macOS swallows.
+    const ONCE_SHIPPED: &str = "CmdOrCtrl+Shift+4";
+
+    /// Whether this platform actually reserves it.
+    ///
+    /// The reserved list is macOS-only today, so elsewhere the correct
+    /// behaviour is to change nothing. These tests branch on the data rather
+    /// than on `cfg!(target_os)`, so adding a Windows entry later exercises
+    /// them instead of silently skipping them.
+    fn is_reserved_here() -> bool {
+        kestrel_core::model::system_reserved(ONCE_SHIPPED).is_some()
+    }
+
     #[test]
     fn migration_reports_whether_it_changed_anything() {
         let mut untouched = AppSettings::default();
@@ -308,20 +321,31 @@ mod tests {
         );
 
         let mut stale = AppSettings::default();
-        stale.workflows[0].shortcut = Some("CmdOrCtrl+Shift+4".into());
-        assert!(migrate(&mut stale));
+        stale.workflows[0].shortcut = Some(ONCE_SHIPPED.into());
+
+        assert_eq!(
+            migrate(&mut stale),
+            is_reserved_here(),
+            "migration should report a change exactly when there was one"
+        );
     }
 
     #[test]
     fn migration_rebinds_shortcuts_the_os_reserves() {
         let mut settings = AppSettings::default();
-        // What the first release shipped, and what macOS swallows.
-        settings.workflows[0].shortcut = Some("CmdOrCtrl+Shift+4".into());
+        settings.workflows[0].shortcut = Some(ONCE_SHIPPED.into());
 
         migrate(&mut settings);
-
         let bound = settings.workflows[0].shortcut.as_deref();
-        assert_ne!(bound, Some("CmdOrCtrl+Shift+4"));
+
+        if !is_reserved_here() {
+            // Nothing is reserved on this platform, so rebinding would be
+            // taking away a shortcut that works.
+            assert_eq!(bound, Some(ONCE_SHIPPED));
+            return;
+        }
+
+        assert_ne!(bound, Some(ONCE_SHIPPED));
         if let Some(bound) = bound {
             assert_eq!(
                 kestrel_core::model::system_reserved(bound),

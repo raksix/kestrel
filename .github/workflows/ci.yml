@@ -53,6 +53,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo-dev \
+            libgbm-dev \
             patchelf \
             ffmpeg \
             libpipewire-0.3-dev
@@ -129,6 +130,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo-dev \
+            libgbm-dev \
             patchelf \
             libpipewire-0.3-dev
 
