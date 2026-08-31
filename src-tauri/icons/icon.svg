@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Kestrel">
+  <title>Kestrel</title>
+
+  <!--
+    A kestrel seen from below, the way you see one hovering — which is what the
+    bird is known for and a fair description of what the app does: it hangs
+    there watching until you pick the thing you want.
+
+    Drawn from below rather than in profile because the silhouette is
+    symmetrical, and a symmetrical mark of four shapes survives being scaled to
+    16 pixels. A head in profile turns to mush at that size.
+
+    The corner brackets are the universal "select a region" mark. They are the
+    part that says what the app is for; the bird is the part that says which
+    app it is.
+  -->
+
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B3550" />
+      <stop offset="1" stop-color="#161B29" />
+    </linearGradient>
+
+    <linearGradient id="plumage" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" />
+      <stop offset="1" stop-color="#D8DEEC" />
+    </linearGradient>
+  </defs>
+
+  <!-- The tile. Radius is 22% of the edge, which is close to the squircle
+       macOS draws and reads correctly when Windows and Linux square it off. -->
+  <rect width="512" height="512" rx="114" fill="url(#tile)" />
+
+  <!-- Selection brackets. Amber because a kestrel is a rufous bird, and
+       because it is the one warm thing against a cold tile. -->
+  <g stroke="#F0A63C" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M104 168V132a28 28 0 0 1 28-28h36" />
+    <path d="M344 104h36a28 28 0 0 1 28 28v36" />
+    <path d="M408 344v36a28 28 0 0 1-28 28h-36" />
+    <path d="M168 408h-36a28 28 0 0 1-28-28v-36" />
+  </g>
+
+  <!--
+    A single kestrel wing, sweeping through the selection.
+
+    Six attempts were made at a recognisable bird before this: two symmetrical
+    from-below silhouettes that read unmistakably as an aeroplane, and four at a
+    head in profile that read as a blob with a snout. The lesson was not that
+    the coordinates needed more tuning — it was that a detailed illustration is
+    the wrong thing to draw by typing numbers, and the wrong thing to put in a
+    16-pixel square either.
+
+    A falcon's wing is a scythe: thick at the shoulder, curved along the
+    leading edge, tapering to a point, notched at the trailing edge where the
+    primaries separate. It is one shape, it is unmistakably organic against
+    four geometric brackets, and it survives being scaled down to a diagonal
+    stroke — which still reads as movement, which is the point.
+  -->
+  <path
+    fill="url(#plumage)"
+    d="M166 355
+       C160 286 197 222 261 186
+       C301 162 341 152 374 157
+       C370 192 349 227 317 256
+       C280 293 227 330 166 355
+       Z"
+  />
+
+  <!-- Two notches at the trailing edge, where a falcon's primaries separate.
+       Cut as tile-coloured wedges rather than shaped into the outline: as part
+       of the path they came out as visible steps that read as a mistake, and
+       below about 48px they vanish, which is what should happen. -->
+  <g fill="url(#tile)">
+    <path d="M315 247 L333 255 L304 280 Z" />
+    <path d="M253 302 L269 312 L237 333 Z" />
+  </g>
+</svg>

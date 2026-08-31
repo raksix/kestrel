@@ -1,3 +1,5 @@
+<img src="src-tauri/icons/icon.svg" width="96" align="right" alt="">
+
 # Kestrel
 
 Cross-platform capture, annotation and sharing — a ShareX-class tool for macOS, Windows and Linux.
