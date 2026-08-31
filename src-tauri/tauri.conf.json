@@ -44,7 +44,6 @@
     "category": "Productivity",
     "shortDescription": "Capture, annotate and share",
     "longDescription": "Kestrel is a cross-platform capture, annotation and sharing tool in the spirit of ShareX.",
-    "licenseFile": "../LICENSE",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

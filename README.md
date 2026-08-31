@@ -242,6 +242,11 @@ xattr -dr com.apple.quarantine /Applications/Kestrel.app
 Signing needs an Apple Developer account and a Windows certificate. Until
 those exist, saying so beats shipping something that looks broken.
 
+The installers do not ask you to accept the licence. The GPL is not an
+end-user agreement — it says in as many words that you do not have to accept
+it to receive or run the program — so gating the installer on a wall of
+licence text would be both a papercut and a misrepresentation of what it is.
+
 Not yet published to Homebrew, winget, AUR or Flathub.
 
 Linux also needs the usual Tauri system dependencies (`libwebkit2gtk-4.1-dev`,
