@@ -2,76 +2,74 @@
   <title>Kestrel</title>
 
   <!--
-    A kestrel seen from below, the way you see one hovering — which is what the
-    bird is known for and a fair description of what the app does: it hangs
-    there watching until you pick the thing you want.
+    A raptor's eye that is also a lens aperture.
 
-    Drawn from below rather than in profile because the silhouette is
-    symmetrical, and a symmetrical mark of four shapes survives being scaled to
-    16 pixels. A head in profile turns to mush at that size.
+    Kestrels are known for their eyesight — they hover and watch, which is a
+    fair description of what a capture tool does while it waits for you to pick
+    something. An aperture alone would read as a generic camera app; the brow
+    over the top is what makes it a bird of prey, and it is the one asymmetric
+    shape in the mark.
 
-    The corner brackets are the universal "select a region" mark. They are the
-    part that says what the app is for; the bird is the part that says which
-    app it is.
+    The geometry is computed, not drawn. The opening is a hexagon at radius 68;
+    each blade seam runs from one of its vertices to the outer circle sixty
+    degrees on, which is the slant a real blade edge has — a radial line would
+    read as a pie chart. An earlier version cut the blades as chords through
+    the middle and came out as a starburst, which is what happens when the
+    construction is guessed instead of worked out.
   -->
 
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2B3550" />
-      <stop offset="1" stop-color="#161B29" />
+    <linearGradient id="tile" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#232A40" />
+      <stop offset="1" stop-color="#0D1119" />
     </linearGradient>
 
-    <linearGradient id="plumage" x1="0.5" y1="0" x2="0.5" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" />
-      <stop offset="1" stop-color="#D8DEEC" />
+    <!-- Rufous through amber: a kestrel's own colours, and warm enough to hold
+         up against a dark tile at 16 pixels. -->
+    <linearGradient id="iris" x1="0.18" y1="0" x2="0.86" y2="1">
+      <stop offset="0" stop-color="#FFCE7A" />
+      <stop offset="0.45" stop-color="#F09A42" />
+      <stop offset="1" stop-color="#C2551F" />
+    </linearGradient>
+
+    <radialGradient id="pupil" cx="0.36" cy="0.3" r="0.9">
+      <stop offset="0" stop-color="#28304A" />
+      <stop offset="1" stop-color="#06080E" />
+    </radialGradient>
+
+    <!-- The brow is its own dark amber rather than the tile colour, so it
+         reads as a ridge overhanging the eye. Cutting it out of the iris was
+         tried first and looked like the circle had been clipped by mistake. -->
+    <linearGradient id="ridge" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#7A3A14" />
+      <stop offset="1" stop-color="#4A2210" />
     </linearGradient>
   </defs>
 
-  <!-- The tile. Radius is 22% of the edge, which is close to the squircle
-       macOS draws and reads correctly when Windows and Linux square it off. -->
   <rect width="512" height="512" rx="114" fill="url(#tile)" />
 
-  <!-- Selection brackets. Amber because a kestrel is a rufous bird, and
-       because it is the one warm thing against a cold tile. -->
-  <g stroke="#F0A63C" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M104 168V132a28 28 0 0 1 28-28h36" />
-    <path d="M344 104h36a28 28 0 0 1 28 28v36" />
-    <path d="M408 344v36a28 28 0 0 1-28 28h-36" />
-    <path d="M168 408h-36a28 28 0 0 1-28-28v-36" />
-  </g>
+  <g>
+    <circle cx="256" cy="256" r="152" fill="url(#iris)" />
 
-  <!--
-    A single kestrel wing, sweeping through the selection.
+    <!-- Blade seams. Cut in the tile colour so they are the same gaps the brow
+         is, rather than a third tone competing with the two that matter. -->
+    <g stroke="#0D1119" stroke-width="11" stroke-linecap="round" opacity="0.92" fill="none">
+      <path d="M256.0 188.0 L387.6 180.0" />
+      <path d="M314.9 222.0 L387.6 332.0" />
+      <path d="M314.9 290.0 L256.0 408.0" />
+      <path d="M256.0 324.0 L124.4 332.0" />
+      <path d="M197.1 290.0 L124.4 180.0" />
+      <path d="M197.1 222.0 L256.0 104.0" />
+    </g>
 
-    Six attempts were made at a recognisable bird before this: two symmetrical
-    from-below silhouettes that read unmistakably as an aeroplane, and four at a
-    head in profile that read as a blob with a snout. The lesson was not that
-    the coordinates needed more tuning — it was that a detailed illustration is
-    the wrong thing to draw by typing numbers, and the wrong thing to put in a
-    16-pixel square either.
+    <!-- The opening, from the same six vertices the seams start at. -->
+    <path
+      d="M256.0 188.0 L314.9 222.0 L314.9 290.0 L256.0 324.0 L197.1 290.0 L197.1 222.0 Z"
+      fill="url(#pupil)"
+    />
 
-    A falcon's wing is a scythe: thick at the shoulder, curved along the
-    leading edge, tapering to a point, notched at the trailing edge where the
-    primaries separate. It is one shape, it is unmistakably organic against
-    four geometric brackets, and it survives being scaled down to a diagonal
-    stroke — which still reads as movement, which is the point.
-  -->
-  <path
-    fill="url(#plumage)"
-    d="M166 355
-       C160 286 197 222 261 186
-       C301 162 341 152 374 157
-       C370 192 349 227 317 256
-       C280 293 227 330 166 355
-       Z"
-  />
+    <!-- One catchlight. It is the difference between an eye and a diagram. -->
+    <circle cx="236" cy="236" r="13" fill="#FFFFFF" opacity="0.85" />
 
-  <!-- Two notches at the trailing edge, where a falcon's primaries separate.
-       Cut as tile-coloured wedges rather than shaped into the outline: as part
-       of the path they came out as visible steps that read as a mistake, and
-       below about 48px they vanish, which is what should happen. -->
-  <g fill="url(#tile)">
-    <path d="M315 247 L333 255 L304 280 Z" />
-    <path d="M253 302 L269 312 L237 333 Z" />
   </g>
 </svg>
