@@ -84,6 +84,22 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # Real signing, used only if these repository secrets exist. With
+          # them the build is signed with a Developer ID and notarised, and
+          # macOS opens it without complaint. Without them Tauri falls back to
+          # the ad-hoc identity in tauri.conf.json, which is what stops macOS
+          # calling the app "damaged" — see the release notes for why that is
+          # still not the same as being notarised.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: Kestrel ${{ github.event.inputs.tag || github.ref_name }}
@@ -96,6 +112,35 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Tauri names the disk images by architecture, which is correct and
+      # unhelpful: aarch64 and x64 do not tell someone which Mac they have.
+      - name: Rename the disk images to say which Mac they are for
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          version="${tag#v}"
+
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) from="${version}_aarch64"; to="macOS-Apple-Silicon" ;;
+            *)                    from="${version}_x64";     to="macOS-Intel" ;;
+          esac
+
+          source="target/${{ matrix.target }}/release/bundle/dmg/Kestrel_${from}.dmg"
+          if [ ! -f "$source" ]; then
+            echo "::error::no disk image at $source"
+            exit 1
+          fi
+
+          renamed="Kestrel-${version}-${to}.dmg"
+          cp "$source" "$renamed"
+          gh release upload "$tag" "$renamed" --clobber
+          # Remove the architecture-named copy so there is one obvious file per
+          # machine rather than two identical ones with different names.
+          gh release delete-asset "$tag" "Kestrel_${from}.dmg" --yes || true
 
       - name: Attach the command-line binary
         shell: bash

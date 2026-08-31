@@ -28,6 +28,9 @@ pub struct AppSettings {
     /// Audio to mix into recordings. Silent unless a device is chosen.
     #[serde(default)]
     pub audio: kestrel_record::AudioSettings,
+    /// Closing to the tray, the Dock icon, and launching at login.
+    #[serde(default)]
+    pub background: crate::background::BackgroundSettings,
 }
 
 impl Default for AppSettings {
@@ -35,6 +38,7 @@ impl Default for AppSettings {
         Self {
             version: 1,
             audio: kestrel_record::AudioSettings::default(),
+            background: crate::background::BackgroundSettings::default(),
             watch: crate::watch::WatchSettings::default(),
             workflows: default_workflows(),
             defaults: TaskSettings::default(),

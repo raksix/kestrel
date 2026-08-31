@@ -4,6 +4,7 @@
 //! domain logic lives in the `kestrel-*` crates so the CLI and the test suite
 //! can use it without Tauri.
 
+mod background;
 mod capture_service;
 mod commands;
 mod editor;
@@ -38,6 +39,10 @@ pub const EVENT_SHORTCUTS_CHANGED: &str = "kestrel://shortcuts-changed";
 pub const EVENT_UPLOAD_COMPLETE: &str = "kestrel://upload-complete";
 /// Emitted whenever recording starts, stops or is paused.
 pub const EVENT_RECORDING_CHANGED: &str = "kestrel://recording-changed";
+/// Emitted whenever the capture history changes — a new entry, a removal, or
+/// an upload URL attached to one. The library window is a live view of that
+/// table and has no other way to know something it did not do has happened.
+pub const EVENT_HISTORY_CHANGED: &str = "kestrel://history-changed";
 /// Emitted when a capture turned out to contain QR codes.
 pub const EVENT_QR_FOUND: &str = "kestrel://qr-found";
 
@@ -65,6 +70,13 @@ pub fn run() {
         // arrive while the app is already running. Without it the scheme in
         // tauri.conf.json would be a setting that does nothing.
         .plugin(tauri_plugin_deep_link::init())
+        // Launch at login. The plugin takes the arguments the login item will
+        // be started with; none, because a session start is not a request to
+        // capture anything.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
@@ -99,6 +111,8 @@ pub fn run() {
             commands::begin_region_capture,
             commands::commit_region_capture,
             commands::cancel_region_capture,
+            commands::begin_region_recording,
+            commands::commit_region_recording,
             commands::overlay_sample,
             commands::clipboard_image,
             commands::open_window_picker,
@@ -161,17 +175,25 @@ pub fn run() {
             commands::split_image,
             commands::convert_video,
             commands::video_thumbnail,
+            commands::library_thumbnail,
             commands::read_metadata,
             commands::strip_metadata,
             commands::index_directory,
             commands::watch_status,
             commands::set_watch,
+            commands::background_status,
+            commands::set_background,
+            commands::quit_app,
         ])
         .setup(move |app| {
             build_tray(app.handle())?;
             shortcuts::reregister(app.handle());
             resume_watch(app.handle());
             rpc::serve(app.handle());
+
+            let background = app.state::<settings::SettingsState>().snapshot().background;
+            background::apply_activation_policy(app.handle(), background.menu_bar_only);
+            intercept_window_close(app.handle());
 
             // Nothing was running to hand this to, so this instance is the one
             // that acts on it — after setup, so the editor and the uploader
@@ -221,6 +243,34 @@ pub fn run() {
                 _ => {}
             }
         });
+}
+
+/// Hide the window instead of quitting when it is closed.
+///
+/// A capture tool has to be running to answer a shortcut. Without this the
+/// first close leaves every shortcut silently doing nothing, which reads as
+/// the shortcuts being broken rather than the app being gone.
+fn intercept_window_close(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        let tauri::WindowEvent::CloseRequested { api, .. } = event else {
+            return;
+        };
+
+        let close_to_tray = handle
+            .state::<settings::SettingsState>()
+            .snapshot()
+            .background
+            .close_to_tray;
+
+        if close_to_tray && background::hide_instead_of_closing(&handle) {
+            api.prevent_close();
+        }
+    });
 }
 
 /// Restart the watch folder if it was on when the app last quit.
@@ -287,6 +337,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let record_region = MenuItem::with_id(
+        app,
+        "record-region",
+        "Bölge kaydı başlat/durdur",
+        true,
+        None::<&str>,
+    )?;
     let record_gif = MenuItem::with_id(
         app,
         "record-gif",
@@ -308,6 +365,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             &monitor_menu,
             &PredefinedMenuItem::separator(app)?,
             &record,
+            &record_region,
             &record_gif,
             &PredefinedMenuItem::separator(app)?,
             &edit_last,
@@ -335,6 +393,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             "capture-active-window" => run_in_background(app, CaptureMethod::ActiveWindow),
             "capture-monitor" => run_in_background(app, CaptureMethod::MonitorMenu),
             "record" => run_in_background(app, CaptureMethod::ScreenRecording),
+            "record-region" => run_in_background(app, CaptureMethod::RegionRecording),
             "record-gif" => run_in_background(app, CaptureMethod::ScreenRecordingGif),
             "edit-last" => open_editor(app),
             "pin-last" => pin_last_capture(app),

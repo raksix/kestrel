@@ -310,9 +310,65 @@
   background: rgb(255 255 255 / 0.25);
 }
 
+/* ── Region recording ───────────────────────────────────────────────── */
+
+/* The toolbar is one row of decisions instead of two rows of tools, so it
+   should not be as wide as the annotation one. */
+.overlay__toolbar--record {
+  gap: 2px;
+  padding: 6px 10px;
+}
+
+.overlay__record-kind,
+.overlay__record-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  color: rgb(255 255 255 / 0.88);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.overlay__record-kind {
+  color: #ff5f57;
+  font-weight: 500;
+}
+
+.overlay__tool--record {
+  gap: 6px;
+  padding: 0 14px;
+  background: #d63a34;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.overlay__tool--record:hover:not(:disabled) {
+  background: #e8514a;
+}
+
+/* Hints as one quiet line rather than a separate floating panel: in record
+   mode the toolbar is small enough to carry them, and a second panel is one
+   more thing covering the screen the user is trying to frame. */
+.overlay__record-hints {
+  gap: 12px;
+  padding: 2px 6px 0;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 11px;
+}
+
+/* Sits just inside the white selection outline, so both rings read at once. */
+.overlay__record-ring {
+  position: absolute;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgb(214 58 52 / 0.9);
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .overlay__hint,
-  .overlay__toolbar {
+  .overlay__toolbar,
+  .overlay__toolbar--record {
     background: rgb(20 20 22);
     backdrop-filter: none;
   }

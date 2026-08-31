@@ -22,38 +22,91 @@ const OVERLAY_PREFIX: &str = "overlay-";
 /// Label of the window/display picker.
 pub const PICKER_LABEL: &str = "picker";
 
+/// What the selection being made is for.
+///
+/// The two modes look almost the same and share every gesture, but they differ
+/// in one decision that cannot be made later: a screenshot needs the screen
+/// frozen at the moment the overlay opened, and a recording must not freeze it,
+/// because the user is about to record whatever moves inside the rectangle they
+/// are still drawing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverlayMode {
+    Capture,
+    /// `gif` chooses between an animated GIF and a video, exactly as the
+    /// non-region recording methods do.
+    Record { gif: bool },
+}
+
 #[derive(Default)]
-pub struct OverlayState(pub Mutex<Option<FrozenFrames>>);
+pub struct OverlayState {
+    /// The frozen screen, for a capture. `None` in record mode.
+    frames: Mutex<Option<FrozenFrames>>,
+    /// `Some` while an overlay session is open. This — not `frames` — is what
+    /// says a session exists, because a recording session has no frames.
+    mode: Mutex<Option<OverlayMode>>,
+}
 
 impl OverlayState {
     pub fn is_active(&self) -> bool {
-        self.0
+        self.mode
             .lock()
             .expect("overlay mutex poisoned")
-            .as_ref()
-            .is_some_and(|frames| !frames.is_empty())
+            .is_some()
     }
 
-    fn store(&self, frames: FrozenFrames) {
-        *self.0.lock().expect("overlay mutex poisoned") = Some(frames);
+    /// What the open session is for, if one is open.
+    pub fn mode(&self) -> Option<OverlayMode> {
+        *self.mode.lock().expect("overlay mutex poisoned")
+    }
+
+    fn store(&self, mode: OverlayMode, frames: Option<FrozenFrames>) {
+        *self.frames.lock().expect("overlay mutex poisoned") = frames;
+        *self.mode.lock().expect("overlay mutex poisoned") = Some(mode);
     }
 
     fn take(&self) -> Option<FrozenFrames> {
-        self.0.lock().expect("overlay mutex poisoned").take()
+        *self.mode.lock().expect("overlay mutex poisoned") = None;
+        self.frames.lock().expect("overlay mutex poisoned").take()
     }
 }
 
 /// Freeze every display and raise a selection overlay on each one.
 pub fn begin_region_selection(app: &AppHandle) -> Result<(), String> {
+    begin(app, OverlayMode::Capture)
+}
+
+/// Raise the same overlay to choose the rectangle a recording will cover.
+pub fn begin_region_recording(app: &AppHandle, gif: bool) -> Result<(), String> {
+    begin(app, OverlayMode::Record { gif })
+}
+
+fn begin(app: &AppHandle, mode: OverlayMode) -> Result<(), String> {
     // Re-entrancy guard: hammering the shortcut must not stack overlays.
     if app.state::<OverlayState>().is_active() {
         focus_existing_overlays(app);
         return Ok(());
     }
 
+    let recording = matches!(mode, OverlayMode::Record { .. });
+
+    // Record mode deliberately does not freeze. A frozen backdrop would show
+    // the user a still of a screen they are about to record live, and worse,
+    // hide the very motion they are trying to frame.
     let backend = kestrel_capture::backend();
-    let frames = backend.freeze().map_err(|e| e.to_string())?;
-    let displays = frames.displays();
+    let displays = if recording {
+        backend.displays().map_err(|e| e.to_string())?
+    } else {
+        Vec::new()
+    };
+    let frames = if recording {
+        None
+    } else {
+        Some(backend.freeze().map_err(|e| e.to_string())?)
+    };
+    let displays = match &frames {
+        Some(frames) => frames.displays(),
+        None => displays,
+    };
 
     // Stage each display's frozen frame where the webview can load it. The
     // overlay paints this rather than being a transparent hole onto the live
@@ -68,8 +121,11 @@ pub fn begin_region_selection(app: &AppHandle) -> Result<(), String> {
     // It goes to disk and is loaded over the asset protocol, not pushed through
     // IPC: a full-screen frame is megabytes, and that is the same reason the
     // editor stages its base image instead of sending a data URL.
-    let staged = stage_frames(app, &frames);
-    app.state::<OverlayState>().store(frames);
+    let staged = match &frames {
+        Some(frames) => stage_frames(app, frames),
+        None => std::collections::HashMap::new(),
+    };
+    app.state::<OverlayState>().store(mode, frames);
 
     // Window creation has to happen on the main thread; queueing it also
     // returns immediately, so the caller is never blocked on the event loop.
@@ -88,9 +144,15 @@ pub fn begin_region_selection(app: &AppHandle) -> Result<(), String> {
                 .map(|path| urlencoding_lite(&path.to_string_lossy()))
                 .unwrap_or_default();
 
+            let (overlay_mode, gif) = match mode {
+                OverlayMode::Capture => ("capture", "0"),
+                OverlayMode::Record { gif } => ("record", if gif { "1" } else { "0" }),
+            };
+
             let url = WebviewUrl::App(
                 format!(
-                    "index.html?view=overlay&display={}&x={}&y={}&w={}&h={}&s={}&frame={frame}",
+                    "index.html?view=overlay&mode={overlay_mode}&gif={gif}\
+                     &display={}&x={}&y={}&w={}&h={}&s={}&frame={frame}",
                     screen.id,
                     screen.region.x,
                     screen.region.y,
@@ -126,7 +188,7 @@ pub fn begin_region_selection(app: &AppHandle) -> Result<(), String> {
                 Err(err) => {
                     tracing::error!(%err, screen_id = screen.id, "could not open the selection overlay");
                     close_overlays(&handle);
-                    handle.state::<OverlayState>().0.lock().ok().map(|mut s| s.take());
+                    handle.state::<OverlayState>().take();
                     return;
                 }
             }
@@ -236,6 +298,20 @@ pub fn crop_selection(app: &AppHandle, region: Region) -> Result<kestrel_capture
     frames.crop(region).map_err(|e| e.to_string())
 }
 
+/// End a recording selection session, closing the overlays.
+///
+/// Separate from `crop_selection` because there is nothing to crop: the
+/// rectangle is handed to the recorder, not to an image.
+pub fn finish_recording_selection(app: &AppHandle) -> Result<bool, String> {
+    let mode = app.state::<OverlayState>().mode();
+    finish(app);
+    match mode {
+        Some(OverlayMode::Record { gif }) => Ok(gif),
+        Some(OverlayMode::Capture) => Err("bu seçim bir ekran görüntüsü içindi".into()),
+        None => Err("no selection is in progress".into()),
+    }
+}
+
 /// A small crop of the frozen screen around a point, for the magnifier.
 ///
 /// This is the one thing the overlay needs pixels for, and it takes only the
@@ -248,8 +324,12 @@ pub fn crop_selection(app: &AppHandle, region: Region) -> Result<kestrel_capture
 /// rounding wrong.
 pub fn sample(app: &AppHandle, x: i32, y: i32, radius: u32) -> Result<Sample, String> {
     let state = app.state::<OverlayState>();
-    let guard = state.0.lock().expect("overlay mutex poisoned");
-    let frames = guard.as_ref().ok_or("no selection is in progress")?;
+    let guard = state.frames.lock().expect("overlay mutex poisoned");
+    // Only a capture session has frames; the magnifier reads the frozen screen,
+    // so it has nothing to show while a recording region is being chosen.
+    let frames = guard
+        .as_ref()
+        .ok_or("no frozen selection is in progress")?;
 
     // An odd width, so there is a single centre pixel to point the crosshair at.
     let radius = radius.clamp(1, 32) as i32;

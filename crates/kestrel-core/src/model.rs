@@ -19,6 +19,9 @@ pub enum CaptureMethod {
     CustomRegion,
     ScreenRecording,
     ScreenRecordingGif,
+    /// Record a dragged region rather than a whole display.
+    RegionRecording,
+    RegionRecordingGif,
     ScrollingCapture,
     AutoCapture,
 }
@@ -27,7 +30,34 @@ impl CaptureMethod {
     pub fn is_recording(self) -> bool {
         matches!(
             self,
-            CaptureMethod::ScreenRecording | CaptureMethod::ScreenRecordingGif
+            CaptureMethod::ScreenRecording
+                | CaptureMethod::ScreenRecordingGif
+                | CaptureMethod::RegionRecording
+                | CaptureMethod::RegionRecordingGif
+        )
+    }
+
+    /// Whether the method asks the user to drag a region before it runs.
+    ///
+    /// Recording a region and screenshotting one share the same overlay, so the
+    /// two families have to be distinguishable without listing the variants at
+    /// every call site.
+    pub fn needs_region_selection(self) -> bool {
+        matches!(
+            self,
+            CaptureMethod::Region
+                | CaptureMethod::RegionLight
+                | CaptureMethod::RegionTransparent
+                | CaptureMethod::RegionRecording
+                | CaptureMethod::RegionRecordingGif
+        )
+    }
+
+    /// Whether a recording method writes an animated GIF instead of a video.
+    pub fn is_gif(self) -> bool {
+        matches!(
+            self,
+            CaptureMethod::ScreenRecordingGif | CaptureMethod::RegionRecordingGif
         )
     }
 }
@@ -349,6 +379,14 @@ pub fn default_workflows() -> Vec<Workflow> {
             CaptureMethod::ScreenRecording,
         )
         .with_shortcut("CmdOrCtrl+Shift+0"),
+        // Recording a region is the recording people actually want most of the
+        // time — a whole 5K display is an enormous file to share a dialog box.
+        Workflow::new(
+            "record-region",
+            "Bölge kaydı",
+            CaptureMethod::RegionRecording,
+        )
+        .with_shortcut("CmdOrCtrl+Alt+R"),
     ]
 }
 
@@ -366,6 +404,7 @@ pub fn fallback_shortcuts(workflow_id: &str) -> &'static [&'static str] {
         "capture-active-window" => &["CmdOrCtrl+Shift+8", "CmdOrCtrl+Alt+8"],
         "capture-monitor" => &["CmdOrCtrl+Shift+9", "CmdOrCtrl+Alt+9"],
         "record-screen" => &["CmdOrCtrl+Shift+0", "CmdOrCtrl+Alt+0", "CmdOrCtrl+Shift+R"],
+        "record-region" => &["CmdOrCtrl+Alt+R", "CmdOrCtrl+Alt+V", "CmdOrCtrl+Shift+V"],
         _ => &[],
     }
 }

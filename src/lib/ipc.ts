@@ -20,6 +20,8 @@ export type CaptureMethod =
   | "custom_region"
   | "screen_recording"
   | "screen_recording_gif"
+  | "region_recording"
+  | "region_recording_gif"
   | "scrolling_capture"
   | "auto_capture";
 
@@ -171,6 +173,27 @@ export const beginRegionCapture = () => invoke<void>("begin_region_capture");
 export const commitRegionCapture = (region: Region, document?: string) =>
   invoke<CaptureOutput>("commit_region_capture", { region, document });
 export const cancelRegionCapture = () => invoke<void>("cancel_region_capture");
+
+// ── Region recording ────────────────────────────────────────────────────
+
+/**
+ * Raise the selection overlay to choose what a recording will cover.
+ *
+ * Rejects before the overlay appears when ffmpeg is missing, so the user is not
+ * asked to frame a rectangle for a recording that cannot be written.
+ */
+export const beginRegionRecording = (gif = false) =>
+  invoke<void>("begin_region_recording", { gif });
+
+/**
+ * Start recording the committed rectangle. The region is in global logical
+ * coordinates; Rust maps it onto the right display's physical pixels.
+ *
+ * Whether it is a GIF was decided when the overlay opened, so it is not passed
+ * again here — the running session already knows.
+ */
+export const commitRegionRecording = (region: Region) =>
+  invoke<RecordingStatus>("commit_region_recording", { region });
 
 /** A magnified patch of the frozen screen, for the overlay's magnifier. */
 export interface OverlaySample {
@@ -360,6 +383,15 @@ export const convertVideo = (path: string, settings: ConvertSettings) =>
 
 export const videoThumbnail = (path: string, atSeconds: number, width?: number) =>
   invoke<string>("video_thumbnail", { path, atSeconds, width });
+
+/**
+ * A path the library can show as a tile picture.
+ *
+ * Images and GIFs come back unchanged; a video gets one frame extracted into
+ * the app's cache directory and that path is returned instead.
+ */
+export const libraryThumbnail = (path: string) =>
+  invoke<string>("library_thumbnail", { path });
 export const recordingStatus = () => invoke<RecordingStatus>("recording_status");
 export const startRecording = (gif = false) =>
   invoke<RecordingStatus>("start_recording", { gif });
@@ -482,6 +514,27 @@ export interface WatchStatus {
 }
 
 export const watchStatus = () => invoke<WatchStatus>("watch_status");
+
+// ── Background behaviour ────────────────────────────────────────────────
+
+export interface BackgroundStatus {
+  closeToTray: boolean;
+  menuBarOnly: boolean;
+  /** Read from the OS, not from settings, so it cannot disagree with reality. */
+  launchAtLogin: boolean;
+  /** False where hiding the dock icon means nothing, so the UI can omit it. */
+  supportsMenuBarOnly: boolean;
+}
+
+export const backgroundStatus = () => invoke<BackgroundStatus>("background_status");
+
+export const setBackground = (changes: {
+  closeToTray?: boolean;
+  menuBarOnly?: boolean;
+  launchAtLogin?: boolean;
+}) => invoke<BackgroundStatus>("set_background", changes);
+
+export const quitApp = () => invoke<void>("quit_app");
 export const setWatch = (enabled: boolean, directory: string | null) =>
   invoke<WatchStatus>("set_watch", { enabled, directory });
 
@@ -510,6 +563,18 @@ export const UPLOAD_COMPLETE = "kestrel://upload-complete";
 
 export const onUploadComplete = (handler: (uploaded: Uploaded) => void): Promise<UnlistenFn> =>
   listen<Uploaded>(UPLOAD_COMPLETE, (event) => handler(event.payload));
+
+export const HISTORY_CHANGED = "kestrel://history-changed";
+
+/**
+ * The capture history changed — a new capture or recording, a removal, or an
+ * upload URL attached to an existing entry.
+ *
+ * The library needs this because most of what lands in the history is started
+ * somewhere else entirely: a tray item, a global shortcut, the overlay.
+ */
+export const onHistoryChanged = (handler: () => void): Promise<UnlistenFn> =>
+  listen<unknown>(HISTORY_CHANGED, () => handler());
 
 export const onShortcutsChanged = (
   handler: (reports: ShortcutReport[]) => void,

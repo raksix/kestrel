@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import {
   historyClear,
   historyList,
   historyRemove,
+  libraryThumbnail,
+  onHistoryChanged,
+  onRecordingChanged,
   uploadLastCapture,
   type HistoryEntry,
 } from "../../lib/ipc";
@@ -35,6 +38,84 @@ const time = (createdAt: number) =>
     minute: "2-digit",
   });
 
+const extensionOf = (path: string) => path.split(".").pop()?.toLowerCase() ?? "";
+
+/** Extensions the recorder can produce, plus the ones the converter can. */
+const VIDEO = new Set(["mp4", "mov", "mkv", "webm", "avi", "m4v"]);
+
+/**
+ * What kind of file an entry points at.
+ *
+ * From the extension rather than from the database, because the history stores
+ * what was captured and not how to display it — and because an entry written by
+ * an older build has no such column to read.
+ */
+function kindOf(entry: HistoryEntry): "image" | "video" | "gif" | "none" {
+  if (!entry.path) return "none";
+  const extension = extensionOf(entry.path);
+  if (VIDEO.has(extension)) return "video";
+  if (extension === "gif") return "gif";
+  return "image";
+}
+
+/**
+ * The tile picture for one entry.
+ *
+ * An image or a GIF is loaded straight off disk over the asset protocol — the
+ * grid holds hundreds of these, and pushing them through IPC would not scale.
+ * A video has no picture to load, so Rust extracts one frame into the cache and
+ * this shows that. Until this existed every recording in the library was a
+ * blank tile, which is exactly what "recordings are not saved" looked like.
+ */
+function Thumbnail({ entry }: { entry: HistoryEntry }) {
+  const kind = kindOf(entry);
+  const [poster, setPoster] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (kind !== "video" || !entry.path) return;
+    let cancelled = false;
+    libraryThumbnail(entry.path)
+      .then((path) => {
+        if (!cancelled) setPoster(path);
+      })
+      // A missing ffmpeg or a moved file costs the picture, not the entry: the
+      // filename, the size and every action below still work.
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.path, kind]);
+
+  if (kind === "none") return <span className="muted">Dosya yok</span>;
+
+  if (kind === "video") {
+    if (failed) return <span className="muted">Video</span>;
+    if (!poster) return <span className="muted">Kare alınıyor…</span>;
+    return (
+      <>
+        <img src={convertFileSrc(poster)} alt="" loading="lazy" />
+        <span className="library__play" aria-hidden="true" />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <img
+        src={convertFileSrc(entry.path as string)}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+      {kind === "gif" && <span className="library__tag">GIF</span>}
+      {failed && <span className="muted">Görüntü açılamadı</span>}
+    </>
+  );
+}
+
 export default function Library() {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [search, setSearch] = useState("");
@@ -56,6 +137,33 @@ export default function Library() {
     const timer = window.setTimeout(refresh, 150);
     return () => window.clearTimeout(timer);
   }, [refresh]);
+
+  // Almost nothing that lands in the history is started here: it comes from the
+  // tray, a global shortcut or the selection overlay. Without these the library
+  // is a snapshot of whatever it happened to load, and a recording finished
+  // while this panel was open never appeared at all.
+  //
+  // Read through a ref so subscribing does not depend on the current search
+  // text — re-listening on every keystroke would drop events in the gap.
+  const refreshRef = useRef(refresh);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
+
+  useEffect(() => {
+    const reload = () => refreshRef.current();
+    const unlisteners = [
+      onHistoryChanged(reload),
+      // A recording only reaches the history when it stops, and that is exactly
+      // when this fires with `active: false`.
+      onRecordingChanged((status) => {
+        if (!status.active) reload();
+      }),
+    ];
+    return () => {
+      unlisteners.forEach((p) => p.then((un) => un()).catch(() => undefined));
+    };
+  }, []);
 
   const copy = useCallback(async (text: string, what: string) => {
     await writeText(text);
@@ -94,6 +202,9 @@ export default function Library() {
           />
           <span className="muted">Sadece yüklenenler</span>
         </label>
+        <button type="button" className="button" onClick={refresh}>
+          Yenile
+        </button>
         <button
           type="button"
           className="button"
@@ -136,84 +247,102 @@ export default function Library() {
         <section key={group.label} className="stack" style={{ gap: "var(--space-2)" }}>
           <h2 className="library__day">{group.label}</h2>
           <div className="grid">
-            {group.items.map((entry) => (
-              <figure key={entry.id} className="library__item">
-                <div className="library__thumb">
-                  {entry.path ? (
-                    // Served from disk rather than re-encoded through IPC; the
-                    // library can hold hundreds of these at once.
-                    <img src={convertFileSrc(entry.path)} alt="" loading="lazy" />
-                  ) : (
-                    <span className="muted">Dosya yok</span>
-                  )}
-                </div>
-                <figcaption className="library__meta">
-                  <span className="library__name" title={entry.filename}>
-                    {entry.filename}
-                  </span>
-                  <span className="library__sub">
-                    {time(entry.createdAt)} · {entry.width} × {entry.height}
-                    {entry.destination ? ` · ${entry.destination}` : ""}
-                  </span>
-                </figcaption>
-                <div className="library__actions">
-                  {entry.url ? (
-                    <>
+            {group.items.map((entry) => {
+              const kind = kindOf(entry);
+              return (
+                <figure key={entry.id} className="library__item">
+                  <div className="library__thumb">
+                    <Thumbnail entry={entry} />
+                  </div>
+                  <figcaption className="library__meta">
+                    <span className="library__name" title={entry.filename}>
+                      {entry.filename}
+                    </span>
+                    <span className="library__sub">
+                      {time(entry.createdAt)} · {entry.width} × {entry.height}
+                      {kind === "video" ? " · video" : ""}
+                      {entry.destination ? ` · ${entry.destination}` : ""}
+                    </span>
+                  </figcaption>
+                  <div className="library__actions">
+                    {entry.url ? (
+                      <>
+                        <button
+                          type="button"
+                          className="button"
+                          onClick={() => void copy(entry.url as string, "URL")}
+                        >
+                          URL
+                        </button>
+                        <button
+                          type="button"
+                          className="button"
+                          onClick={() => void openUrl(entry.url as string)}
+                        >
+                          Bağlantıyı aç
+                        </button>
+                      </>
+                    ) : (
                       <button
                         type="button"
                         className="button"
-                        onClick={() => void copy(entry.url as string, "URL")}
+                        title="Son yakalamayı yükler"
+                        onClick={async () => {
+                          try {
+                            await uploadLastCapture();
+                            refresh();
+                          } catch (e) {
+                            setError(String(e));
+                          }
+                        }}
                       >
-                        URL
+                        Yükle
                       </button>
-                      <button
-                        type="button"
-                        className="button"
-                        onClick={() => void openUrl(entry.url as string)}
-                      >
-                        Aç
-                      </button>
-                    </>
-                  ) : (
+                    )}
+                    {entry.path && (
+                      <>
+                        {/* The only way to actually watch a recording from
+                            here: the webview cannot play it inline, and a
+                            video the library will not open is a video the
+                            library may as well not list. */}
+                        <button
+                          type="button"
+                          className="button"
+                          title={kind === "video" ? "Varsayılan oynatıcıda aç" : "Varsayılan uygulamada aç"}
+                          onClick={async () => {
+                            try {
+                              await openPath(entry.path as string);
+                            } catch (e) {
+                              setError(String(e));
+                            }
+                          }}
+                        >
+                          {kind === "video" ? "Oynat" : "Aç"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button"
+                          onClick={() => void copy(entry.path as string, "Yol")}
+                        >
+                          Yol
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       className="button"
-                      title="Son yakalamayı yükler"
+                      title="Sadece listeden kaldırır, dosyayı silmez"
                       onClick={async () => {
-                        try {
-                          await uploadLastCapture();
-                          refresh();
-                        } catch (e) {
-                          setError(String(e));
-                        }
+                        await historyRemove(entry.id);
+                        refresh();
                       }}
                     >
-                      Yükle
+                      Kaldır
                     </button>
-                  )}
-                  {entry.path && (
-                    <button
-                      type="button"
-                      className="button"
-                      onClick={() => void copy(entry.path as string, "Yol")}
-                    >
-                      Yol
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="button"
-                    title="Sadece listeden kaldırır, dosyayı silmez"
-                    onClick={async () => {
-                      await historyRemove(entry.id);
-                      refresh();
-                    }}
-                  >
-                    Kaldır
-                  </button>
-                </div>
-              </figure>
-            ))}
+                  </div>
+                </figure>
+              );
+            })}
           </div>
         </section>
       ))}

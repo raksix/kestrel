@@ -3,6 +3,7 @@ import Destinations, { WatchFolder } from "./features/destinations/Destinations"
 import Library from "./features/library/Library";
 import Tools from "./features/tools/Tools";
 import PermissionGate from "./features/settings/PermissionGate";
+import BackgroundSettings from "./features/settings/BackgroundSettings";
 import ShortcutSettings from "./features/settings/ShortcutSettings";
 import TaskChain from "./features/settings/TaskChain";
 import { openEditor } from "./lib/editorTypes";
@@ -47,6 +48,8 @@ const METHOD_LABEL: Record<string, string> = {
   monitor_menu: "Ekran listesinden seç",
   screen_recording: "Video kaydı",
   screen_recording_gif: "GIF kaydı",
+  region_recording: "Seçtiğin bölgeyi video kaydet",
+  region_recording_gif: "Seçtiğin bölgeyi GIF kaydet",
   scrolling_capture: "Kaydırarak uzun sayfa",
   last_region: "Son kullanılan bölge",
   custom_region: "Kayıtlı sabit bölge",
@@ -198,6 +201,7 @@ export default function App() {
                     setWorkflows(updated.workflows);
                   }}
                 />
+                <BackgroundSettings />
               </>
             )}
             {section === "library" && <Library />}

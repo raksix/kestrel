@@ -130,6 +130,10 @@ that language exactly, so those files work unmodified.
   bindings the OS actually accepted
 - ShareX-compatible filename patterns (all 37 tokens) with a live preview
 - Settings persisted as readable JSON in the platform config directory
+- Runs in the background: closing the window hides it rather than quitting,
+  because a capture tool has to be running to answer a shortcut. Optionally
+  lives in the menu bar with no Dock icon, and optionally starts with the
+  session
 
 The overlay paints the frozen screen and dims it, so it covers the Dock and the
 menu bar like ShareX does — and so blur and pixelate have real pixels to redact.
@@ -241,6 +245,18 @@ xattr -dr com.apple.quarantine /Applications/Kestrel.app
 
 Signing needs an Apple Developer account and a Windows certificate. Until
 those exist, saying so beats shipping something that looks broken.
+
+macOS builds are ad-hoc signed. Without that the bundle carries only the
+linker's signature — the executable is signed but the bundle's resources are
+not sealed and its `Info.plist` is not bound — and macOS reports the app as
+**damaged** rather than merely unidentified. Ad-hoc signing costs nothing and
+fixes that; it is still not notarisation, so the first launch needs the
+context-menu Open or the `xattr` command above.
+
+The workflow uses a Developer ID and notarises if `APPLE_SIGNING_IDENTITY`,
+`APPLE_CERTIFICATE`, `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` are set
+as repository secrets, and signs the Windows installers if
+`WINDOWS_CERTIFICATE` is. Without them it falls back to ad-hoc.
 
 The installers do not ask you to accept the licence. The GPL is not an
 end-user agreement — it says in as many words that you do not have to accept

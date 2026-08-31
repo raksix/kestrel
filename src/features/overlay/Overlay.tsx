@@ -4,6 +4,7 @@ import {
   cancelRegionCapture,
   clipboardImage,
   commitRegionCapture,
+  commitRegionRecording,
   listWindows,
   type Region,
   type WindowInfo,
@@ -25,7 +26,20 @@ import OverlayToolbar, {
   OVERLAY_TOOLS,
   type OverlayTool,
 } from "./OverlayToolbar";
+import RecordToolbar from "./RecordToolbar";
 import "./overlay.css";
+
+/** What the rectangle being drawn is for. */
+export type OverlayMode = "capture" | "record";
+
+/**
+ * The recorder's frame rate, shown next to the selection size.
+ *
+ * Mirrored from `RecordSettings::default` in Rust rather than fetched: it is a
+ * label, and one extra IPC round trip at the moment the overlay appears is
+ * exactly what the overlay path is built to avoid.
+ */
+const RECORD_FPS = 30;
 
 interface OverlayProps {
   /** Display bounds in the global logical coordinate space. */
@@ -42,6 +56,16 @@ interface OverlayProps {
    * pixels they can see.
    */
   framePath: string | null;
+  /**
+   * Whether the selection becomes a screenshot or a screen recording.
+   *
+   * In record mode there is no frozen frame — the user has to see the live
+   * screen to frame what they are about to record — and the annotation tools
+   * are gone, because nothing drawn here could survive into a video.
+   */
+  mode: OverlayMode;
+  /** In record mode, whether the output is an animated GIF. */
+  gif: boolean;
 }
 
 interface Point {
@@ -112,7 +136,16 @@ function dimAround(
   ctx.restore();
 }
 
-export default function Overlay({ origin, size, scale, framePath }: OverlayProps) {
+export default function Overlay({
+  origin,
+  size,
+  scale,
+  framePath,
+  mode,
+  gif,
+}: OverlayProps) {
+  const recording = mode === "record";
+
   const [anchor, setAnchor] = useState<Point | null>(null);
   const [cursor, setCursor] = useState<Point>({ x: 0, y: 0 });
   const [selection, setSelection] = useState<Region | null>(null);
@@ -194,36 +227,72 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
       committing.current = true;
       setBusy(true);
 
-      // Annotations were drawn in screen space; the captured image starts at
-      // the selection origin and is in physical pixels.
-      const drawn = shapesRef.current.map((shape) =>
-        transformShape(shape, -region.x, -region.y, scale),
-      );
-      const document = drawn.length > 0 ? JSON.stringify({ shapes: drawn }) : undefined;
+      // Local CSS pixels are logical points on this display; the commands both
+      // take global logical coordinates.
+      const global = {
+        x: Math.round(region.x + origin.x),
+        y: Math.round(region.y + origin.y),
+        width: Math.round(region.width),
+        height: Math.round(region.height),
+      };
 
       try {
-        await commitRegionCapture(
-          {
-            x: Math.round(region.x + origin.x),
-            y: Math.round(region.y + origin.y),
-            width: Math.round(region.width),
-            height: Math.round(region.height),
-          },
-          document,
+        if (recording) {
+          // No document: a recording is encoded from the live screen frame by
+          // frame, so there is nothing for annotations to be composited onto.
+          await commitRegionRecording(global);
+          return;
+        }
+
+        // Annotations were drawn in screen space; the captured image starts at
+        // the selection origin and is in physical pixels.
+        const drawn = shapesRef.current.map((shape) =>
+          transformShape(shape, -region.x, -region.y, scale),
         );
+        const document = drawn.length > 0 ? JSON.stringify({ shapes: drawn }) : undefined;
+
+        await commitRegionCapture(global, document);
       } catch (error) {
-        console.error("region capture failed", error);
+        // In record mode the overlays are already closed by the time an error
+        // can happen, so the failure is reported by Rust as a capture failure
+        // and surfaces in the main window instead of in a window that is gone.
+        console.error(recording ? "region recording failed" : "region capture failed", error);
         committing.current = false;
         setBusy(false);
       }
     },
-    [origin, scale],
+    [origin, recording, scale],
   );
 
   const cancel = useCallback(() => {
     if (committing.current) return;
     committing.current = true;
     void cancelRegionCapture();
+  }, []);
+
+  /**
+   * Move or resize the selection by one arrow key.
+   *
+   * A drag lands within a pixel or two of what was meant, and for a recording
+   * the size decides the encoded frame, so the last few pixels are worth
+   * having. Alt resizes instead of moving; Shift makes the step ten.
+   */
+  const nudge = useCallback((event: KeyboardEvent) => {
+    const step = event.shiftKey ? 10 : 1;
+    const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+    const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+
+    setSelection((current) => {
+      if (!current) return current;
+      if (event.altKey) {
+        return {
+          ...current,
+          width: Math.max(1, current.width + dx),
+          height: Math.max(1, current.height + dy),
+        };
+      }
+      return { ...current, x: current.x + dx, y: current.y + dy };
+    });
   }, []);
 
   const windowAt = useCallback(
@@ -335,9 +404,15 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
 
       // The dim goes on last and only outside the selection, so annotations
       // inside it stay at full strength while everything that will not be
-      // captured recedes. Without a backdrop there is nothing to dim — the
-      // live screen shows through the transparent window instead.
-      if (frame) {
+      // captured recedes.
+      //
+      // In record mode there is no frozen frame by design, and the dim is
+      // painted anyway: a translucent black over the transparent window dims
+      // the live screen underneath, which is the only thing that shows the user
+      // what is inside the rectangle and what is not. For a capture the dim is
+      // skipped without a backdrop, because blur and pixelate previews would
+      // then be dimming pixels they cannot see.
+      if (frame || recording) {
         dimAround(ctx, selection, size.width, size.height);
       }
     };
@@ -348,7 +423,7 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
     // draws nothing for it. This is how it gets a second chance.
     setImageReadyHandler(paint);
     return () => setImageReadyHandler(null);
-  }, [shapes, previewShape, size, scale, frame, selection]);
+  }, [shapes, previewShape, size, scale, frame, recording, selection]);
 
   // ── Pointer ───────────────────────────────────────────────────────────
 
@@ -440,6 +515,25 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
     setAnchor(null);
 
     const isClick = region.width < CLICK_THRESHOLD && region.height < CLICK_THRESHOLD;
+
+    // A recording is not committed by letting go of the mouse. A screenshot is
+    // instant and repeatable, so releasing the drag is the whole gesture; a
+    // recording is a decision you then live inside for a minute, and starting
+    // one on a slightly wrong rectangle costs a retake. So the release only
+    // *sets* the rectangle — Enter or the record button starts it, and the
+    // arrow keys can still fix the last few pixels first.
+    if (recording) {
+      if (isClick) {
+        const target = windowAt(point);
+        // Clicking a window frames it, which is the fast way to record one app.
+        setSelection(target ? toLocal(target.region) : null);
+        setHovered(null);
+      } else {
+        setSelection(region);
+      }
+      return;
+    }
+
     if (isClick) {
       const target = windowAt(point);
       if (target) {
@@ -460,6 +554,10 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
   }, [cursor]);
 
   useEffect(() => {
+    // Nothing pasted can end up in a video, so in record mode a paste is left
+    // to whatever is underneath rather than being swallowed by the overlay.
+    if (recording) return;
+
     const accept = async (event: ClipboardEvent | DragEvent) => {
       const image = await imageFromEvent(event);
       if (!image) return;
@@ -490,7 +588,7 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
       window.removeEventListener("drop", onDrop);
       window.removeEventListener("dragover", onDragOver);
     };
-  }, [addShape, size]);
+  }, [addShape, recording, size]);
 
   // ── Keyboard ──────────────────────────────────────────────────────────
 
@@ -511,6 +609,27 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
         else cancel();
         return;
       }
+      // Everything below this point either draws or picks a tool, neither of
+      // which exists while a recording region is being chosen. Enter, Space,
+      // the arrows and Escape are handled above and below it.
+      if (recording) {
+        if (event.key === "Enter" && selection) {
+          event.preventDefault();
+          void commit(selection);
+          return;
+        }
+        if (event.key === " " || event.code === "Space") {
+          event.preventDefault();
+          void commit({ x: 0, y: 0, width: size.width, height: size.height });
+          return;
+        }
+        if (selection && event.key.startsWith("Arrow")) {
+          event.preventDefault();
+          nudge(event);
+        }
+        return;
+      }
+
       if (mod && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) redo();
@@ -570,38 +689,26 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
 
       if (selection && event.key.startsWith("Arrow")) {
         event.preventDefault();
-        const step = event.shiftKey ? 10 : 1;
-        const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
-        const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
-
-        setSelection((current) => {
-          if (!current) return current;
-          if (event.altKey) {
-            return {
-              ...current,
-              width: Math.max(1, current.width + dx),
-              height: Math.max(1, current.height + dy),
-            };
-          }
-          return { ...current, x: current.x + dx, y: current.y + dy };
-        });
+        nudge(event);
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [addShape, cancel, commit, editing, redo, selection, size, tool, undo]);
+  }, [addShape, cancel, commit, editing, nudge, recording, redo, selection, size, tool, undo]);
 
   return (
     <div
-      className={`overlay ${tool ? "overlay--drawing" : ""}`}
+      className={`overlay ${tool ? "overlay--drawing" : ""} ${
+        recording ? "overlay--record" : ""
+      }`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onContextMenu={(event) => event.preventDefault()}
       role="application"
-      aria-label="Bölge seçimi"
+      aria-label={recording ? "Kaydedilecek bölgeyi seç" : "Bölge seçimi"}
     >
       {/*
         No dim elements here: the canvas paints the frozen screen, the
@@ -657,10 +764,32 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
         </div>
       )}
 
+      {/* A recording rectangle carries a red frame as well as the white one:
+          it is the same shape as a screenshot selection and means something
+          very different, and red is what every recorder on every platform
+          uses to say so. */}
+      {recording && active && (
+        <div
+          className="overlay__record-ring"
+          style={{ left: active.x, top: active.y, width: active.width, height: active.height }}
+          aria-hidden="true"
+        />
+      )}
+
       {busy ? (
         <div className="overlay__hint">
-          <span>Yakalanıyor…</span>
+          <span>{recording ? "Kayıt başlatılıyor…" : "Yakalanıyor…"}</span>
         </div>
+      ) : recording ? (
+        <RecordToolbar
+          gif={gif}
+          selection={selection}
+          fps={RECORD_FPS}
+          onCancel={cancel}
+          onStart={() =>
+            void commit(selection ?? { x: 0, y: 0, width: size.width, height: size.height })
+          }
+        />
       ) : (
         <OverlayToolbar
           tool={tool}
@@ -696,7 +825,9 @@ export default function Overlay({ origin, size, scale, framePath }: OverlayProps
         />
       )}
 
-      {magnify && !busy && !editing && (
+      {/* The magnifier samples the *frozen* screen, which record mode
+          deliberately does not have. */}
+      {magnify && !recording && !busy && !editing && (
         <Magnifier cursor={cursor} origin={origin} bounds={size} />
       )}
     </div>

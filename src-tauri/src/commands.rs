@@ -75,7 +75,10 @@ fn finish_capture(
         .state::<crate::history::History>()
         .insert(&entry, chrono::Utc::now().timestamp())
     {
-        Ok(id) => app.state::<crate::history::LastEntryId>().set(id),
+        Ok(id) => {
+            app.state::<crate::history::LastEntryId>().set(id);
+            let _ = app.emit(crate::EVENT_HISTORY_CHANGED, ());
+        }
         Err(err) => tracing::warn!(%err, "could not record the capture in history"),
     }
 
@@ -517,6 +520,113 @@ pub fn cancel_region_capture(app: AppHandle) {
     overlay::finish(&app);
 }
 
+// ── Region recording ────────────────────────────────────────────────────
+
+/// Raise the selection overlay to choose what a recording will cover.
+#[tauri::command]
+pub fn begin_region_recording(app: AppHandle, gif: Option<bool>) -> Result<(), String> {
+    require_permission()?;
+    // Said before the overlay covers the screen rather than after the user has
+    // framed a rectangle: ffmpeg is what writes the file, and finding out it is
+    // missing at the end wastes the whole gesture.
+    if !crate::record::ffmpeg_status().available {
+        return Err(format!(
+            "Ekran kaydı için ffmpeg gerekiyor. Kur ve tekrar dene — {}",
+            crate::record::ffmpeg_status()
+                .install_hint
+                .unwrap_or_default()
+        ));
+    }
+    overlay::begin_region_recording(&app, gif.unwrap_or(false))
+}
+
+/// How long to wait after closing the overlays before the first frame is taken.
+///
+/// Closing a window is queued on the main thread, so recording immediately
+/// catches the overlay's own dim in the first frames of the video. Long enough
+/// for the compositor to have dropped it, short enough that the user does not
+/// read it as a stall.
+const OVERLAY_TEARDOWN: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Start recording the committed rectangle.
+///
+/// The region arrives in *global logical* coordinates, which is what the
+/// overlay works in. The recorder crops raw frames, so it needs the rectangle
+/// in the *physical pixels of one display* — those are different numbers on
+/// every Retina panel, and getting it wrong records the wrong quarter of the
+/// screen.
+#[tauri::command]
+pub fn commit_region_recording(
+    app: AppHandle,
+    region: Region,
+    settings: State<'_, SettingsState>,
+) -> Result<crate::record::RecordingStatus, String> {
+    if region.width < 1 || region.height < 1 {
+        overlay::finish(&app);
+        return Err("Kaydedilecek bölge boş.".into());
+    }
+
+    let gif = overlay::finish_recording_selection(&app)?;
+    let (display_id, local) = display_region(region)?;
+
+    std::thread::sleep(OVERLAY_TEARDOWN);
+
+    let snapshot = settings.snapshot();
+    let started = start_recording_inner(
+        &app,
+        gif,
+        &snapshot.defaults,
+        &snapshot.audio,
+        Some((display_id, local)),
+    );
+
+    // The overlay window this call came from is already closed, so its own
+    // error handling has nowhere to draw. Failures are announced the same way a
+    // failed capture is, which the main window already listens for.
+    if let Err(message) = &started {
+        let _ = app.emit(crate::EVENT_CAPTURE_FAILED, message.clone());
+    }
+    started
+}
+
+/// Which display a rectangle belongs to, and where it sits inside that
+/// display's frames in physical pixels.
+///
+/// The display is chosen by the rectangle's centre rather than its origin: a
+/// selection dragged from just outside the edge of a display still belongs to
+/// the display most of it covers.
+fn display_region(region: Region) -> Result<(u32, Region), String> {
+    let displays = backend().displays().map_err(err)?;
+    let centre_x = region.x + region.width as i32 / 2;
+    let centre_y = region.y + region.height as i32 / 2;
+
+    let target = displays
+        .iter()
+        .find(|d| {
+            centre_x >= d.region.x
+                && centre_x < d.region.x + d.region.width as i32
+                && centre_y >= d.region.y
+                && centre_y < d.region.y + d.region.height as i32
+        })
+        .or_else(|| displays.iter().find(|d| d.is_primary))
+        .or_else(|| displays.first())
+        .ok_or("Ekran bulunamadı.")?;
+
+    let scale = if target.scale_factor > 0.0 {
+        target.scale_factor
+    } else {
+        1.0
+    };
+
+    let local = Region::new(
+        (((region.x - target.region.x) as f32) * scale).round() as i32,
+        (((region.y - target.region.y) as f32) * scale).round() as i32,
+        ((region.width as f32 * scale).round() as u32).max(1),
+        ((region.height as f32 * scale).round() as u32).max(1),
+    );
+    Ok((target.id, local))
+}
+
 // ── Picker ──────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -875,7 +985,9 @@ fn record_upload_in_history(app: &AppHandle, uploaded: &crate::uploads::Uploaded
         &uploaded.destination,
     ) {
         tracing::warn!(%err, "could not record the upload in history");
+        return;
     }
+    let _ = app.emit(crate::EVENT_HISTORY_CHANGED, ());
 }
 
 // ── History ─────────────────────────────────────────────────────────────
@@ -896,12 +1008,92 @@ pub fn history_list(
 pub fn history_remove(app: AppHandle, id: i64) -> Result<(), String> {
     app.state::<crate::history::History>()
         .remove(id)
-        .map_err(err)
+        .map_err(err)?;
+    let _ = app.emit(crate::EVENT_HISTORY_CHANGED, ());
+    Ok(())
 }
 
 #[tauri::command]
 pub fn history_clear(app: AppHandle) -> Result<(), String> {
-    app.state::<crate::history::History>().clear().map_err(err)
+    app.state::<crate::history::History>().clear().map_err(err)?;
+    let _ = app.emit(crate::EVENT_HISTORY_CHANGED, ());
+    Ok(())
+}
+
+/// A short, filesystem-safe name for a path.
+///
+/// Not a cryptographic hash and not meant to be: this only has to keep two
+/// different videos from sharing one cache file, and a path with slashes,
+/// spaces and non-ASCII in it cannot be a filename as it stands.
+fn path_key(path: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// A picture to put on a library tile.
+///
+/// For a screenshot or a GIF this is the file itself — the library loads it
+/// straight off disk over the asset protocol, which is why the grid can hold
+/// hundreds of entries. A video has no such picture, so one frame is extracted
+/// and cached; without this every recording in the library was a blank tile,
+/// which is what "recordings are not saved" actually looked like.
+///
+/// The cache lives in the app's cache directory, not beside the recording: a
+/// `-thumb.png` appearing next to the user's video is litter in their folder,
+/// and would be picked up by the watch folder as a new capture.
+#[tauri::command]
+pub fn library_thumbnail(app: AppHandle, path: String) -> Result<String, String> {
+    let source = std::path::PathBuf::from(&path);
+    if !source.is_file() {
+        return Err("Dosya bulunamadı.".into());
+    }
+
+    let extension = source
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+
+    // Anything the webview can draw itself needs no help.
+    if matches!(
+        extension.as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "avif"
+    ) {
+        return Ok(path);
+    }
+
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|_| "Önbellek klasörü yok.".to_string())?
+        .join("thumbs");
+    std::fs::create_dir_all(&dir).map_err(err)?;
+
+    // Keyed by path *and* modification time, so a re-encoded file at the same
+    // path does not keep showing the old frame.
+    let modified = source
+        .metadata()
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let cached = dir.join(format!("{:016x}-{modified}.png", path_key(&path)));
+    if cached.is_file() {
+        return Ok(cached.to_string_lossy().into_owned());
+    }
+
+    // A frame from the very start of a clip is often a fade-in or the desktop
+    // mid-redraw, so this takes one a moment in. ffmpeg clamps a seek past the
+    // end back to the last frame, so a shorter clip still yields a picture.
+    kestrel_record::convert::run(
+        &ffmpeg_binary()?,
+        &kestrel_record::convert::thumbnail_args(&source, &cached, 0.5, 480),
+    )
+    .map_err(err)?;
+
+    Ok(cached.to_string_lossy().into_owned())
 }
 
 /// One entry, for a detail view or to re-open a capture.
@@ -968,6 +1160,7 @@ pub fn start_recording(
         gif.unwrap_or(false),
         &snapshot.defaults,
         &snapshot.audio,
+        None,
     )
 }
 
@@ -975,11 +1168,15 @@ pub fn start_recording(
 ///
 /// Recordings land beside screenshots and follow the same naming pattern, so
 /// one folder and one convention cover everything Kestrel produces.
+///
+/// `target` is the display and the rectangle inside it to record, in that
+/// display's physical pixels; `None` records the primary display whole.
 fn start_recording_inner(
     app: &AppHandle,
     gif: bool,
     settings: &TaskSettings,
     audio: &kestrel_record::AudioSettings,
+    target: Option<(u32, Region)>,
 ) -> Result<crate::record::RecordingStatus, String> {
     require_permission()?;
 
@@ -1017,10 +1214,15 @@ fn start_recording_inner(
         }
     };
 
+    let (display_id, region) = match target {
+        Some((id, region)) => (Some(id), Some(region)),
+        None => (None, None),
+    };
+
     let status = crate::record::start(
         &app.state::<crate::record::RecordState>(),
-        None,
-        None,
+        display_id,
+        region,
         &record_settings,
         &directory,
         &stem,
@@ -1056,7 +1258,14 @@ pub fn stop_recording(app: AppHandle) -> Result<String, String> {
         .state::<crate::history::History>()
         .insert(&entry, chrono::Utc::now().timestamp())
     {
-        Ok(id) => app.state::<crate::history::LastEntryId>().set(id),
+        Ok(id) => {
+            app.state::<crate::history::LastEntryId>().set(id);
+            // The library is a live view of this table, and it is open in a
+            // window that did nothing to cause this. Without the event the
+            // recording is in the history but invisible until the user retypes
+            // a search — which reads as "recordings are not saved at all".
+            let _ = app.emit(crate::EVENT_HISTORY_CHANGED, ());
+        }
         Err(err) => tracing::warn!(%err, "could not record the recording in history"),
     }
 
@@ -1262,9 +1471,19 @@ pub fn dispatch(
                 // did, failing to record it in the history at all.
                 stop_recording(app.clone())?;
             } else {
-                let gif = matches!(method, M::ScreenRecordingGif);
+                let gif = method.is_gif();
                 let audio = app.state::<SettingsState>().snapshot().audio;
-                start_recording_inner(app, gif, settings, &audio)?;
+                start_recording_inner(app, gif, settings, &audio, None)?;
+            }
+            Ok(None)
+        }
+        // The region equivalent, and a toggle for the same reason: the shortcut
+        // that started it is the only thing at hand to stop it.
+        M::RegionRecording | M::RegionRecordingGif => {
+            if app.state::<crate::record::RecordState>().is_active() {
+                stop_recording(app.clone())?;
+            } else {
+                begin_region_recording(app.clone(), Some(method.is_gif()))?;
             }
             Ok(None)
         }
@@ -1800,4 +2019,78 @@ pub fn toggle_scrolling_capture(app: AppHandle) -> Result<Option<CaptureOutput>,
 #[tauri::command]
 pub fn cancel_scrolling_capture(app: AppHandle) {
     crate::scrolling::cancel(&app);
+}
+
+// ── Background behaviour ────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundStatus {
+    pub close_to_tray: bool,
+    pub menu_bar_only: bool,
+    /// Read back from the OS rather than from settings, so the checkbox cannot
+    /// disagree with the system's own login items.
+    pub launch_at_login: bool,
+    /// False where hiding the dock icon has no meaning, so the UI can leave the
+    /// control out instead of offering one that does nothing.
+    pub supports_menu_bar_only: bool,
+}
+
+#[tauri::command]
+pub fn background_status(app: AppHandle, settings: State<'_, SettingsState>) -> BackgroundStatus {
+    let background = settings.snapshot().background;
+    BackgroundStatus {
+        close_to_tray: background.close_to_tray,
+        menu_bar_only: background.menu_bar_only,
+        launch_at_login: crate::background::launches_at_login(&app),
+        supports_menu_bar_only: cfg!(target_os = "macos"),
+    }
+}
+
+/// Change one of the background behaviours.
+///
+/// Each is applied before it is persisted, so a setting that the OS refuses —
+/// adding a login item, most likely — is reported instead of being written down
+/// as though it had worked.
+#[tauri::command]
+pub fn set_background(
+    app: AppHandle,
+    close_to_tray: Option<bool>,
+    menu_bar_only: Option<bool>,
+    launch_at_login: Option<bool>,
+    settings: State<'_, SettingsState>,
+) -> Result<BackgroundStatus, String> {
+    if let Some(enabled) = launch_at_login {
+        crate::background::apply_launch_at_login(&app, enabled)?;
+    }
+    if let Some(enabled) = menu_bar_only {
+        crate::background::apply_activation_policy(&app, enabled);
+    }
+
+    settings
+        .update(|state| {
+            if let Some(value) = close_to_tray {
+                state.background.close_to_tray = value;
+            }
+            if let Some(value) = menu_bar_only {
+                state.background.menu_bar_only = value;
+            }
+            if let Some(value) = launch_at_login {
+                state.background.launch_at_login = value;
+            }
+            Ok(())
+        })
+        .map_err(err)?;
+
+    Ok(background_status(app, settings))
+}
+
+/// Quit for real, from the UI.
+///
+/// Needed precisely because closing the window no longer does: without an
+/// explicit way out, the only one left is the tray, and someone who has hidden
+/// the dock icon and closed the window has to go looking for it.
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    app.exit(0);
 }

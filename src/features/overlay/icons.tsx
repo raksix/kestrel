@@ -157,4 +157,17 @@ export const ACTION_ICONS = {
       <path {...stroke} d="M4 12.5l5.5 5.5L20 6" />
     </Svg>
   ),
+  // A filled disc, not an outline: this is the universal record glyph, and an
+  // outlined circle would read as "stop" on the very control that starts.
+  record: () => (
+    <Svg>
+      <circle cx="12" cy="12" r="6" fill="currentColor" />
+    </Svg>
+  ),
+  film: () => (
+    <Svg>
+      <rect {...stroke} x="3" y="6" width="18" height="12" rx="2" />
+      <path {...stroke} d="M7 6v12M17 6v12M3 12h18" />
+    </Svg>
+  ),
 };

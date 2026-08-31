@@ -32,6 +32,11 @@ function root() {
           size={{ width: number("w", window.innerWidth), height: number("h", window.innerHeight) }}
           scale={number("s", 1) || 1}
           framePath={params.get("frame") || null}
+          // The same overlay picks the rectangle for a screenshot and for a
+          // recording. Anything other than an explicit "record" is a capture,
+          // so a malformed URL can never silently start recording.
+          mode={params.get("mode") === "record" ? "record" : "capture"}
+          gif={params.get("gif") === "1"}
         />
       );
     case "editor":

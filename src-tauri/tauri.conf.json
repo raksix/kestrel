@@ -70,7 +70,11 @@
         "role": "Editor",
         "mimeType": "application/json"
       }
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "10.15"
+    }
   },
   "plugins": {
     "deep-link": {
