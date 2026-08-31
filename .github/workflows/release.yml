@@ -70,6 +70,7 @@ jobs:
             libxdo-dev \
             libgbm-dev \
             patchelf \
+            fonts-dejavu-core \
             libpipewire-0.3-dev
 
       - run: npm ci
