@@ -2725,7 +2725,7 @@ dependencies = [
 
 [[package]]
 name = "kestrel-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -2760,7 +2760,7 @@ dependencies = [
 
 [[package]]
 name = "kestrel-capture"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arboard",
  "image",
@@ -2773,7 +2773,7 @@ dependencies = [
 
 [[package]]
 name = "kestrel-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "dirs 6.0.0",
@@ -2789,7 +2789,7 @@ dependencies = [
 
 [[package]]
 name = "kestrel-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "rand 0.8.8",
@@ -2801,7 +2801,7 @@ dependencies = [
 
 [[package]]
 name = "kestrel-editor"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ab_glyph",
  "base64 0.22.1",
@@ -2816,7 +2816,7 @@ dependencies = [
 
 [[package]]
 name = "kestrel-record"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "image",
  "kestrel-capture",
@@ -2829,7 +2829,7 @@ dependencies = [
 
 [[package]]
 name = "kestrel-tools"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "image",
  "kamadak-exif",
@@ -2848,7 +2848,7 @@ dependencies = [
 
 [[package]]
 name = "kestrel-upload"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "regex",

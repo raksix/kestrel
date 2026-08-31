@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 # Verified by building the workspace with each toolchain: 1.85 fails (serde_with,
 # time and notify-rust, pulled in by Tauri, need newer), 1.89 succeeds.
